@@ -11,7 +11,6 @@ These options are available for all commands:
 
 ```
 --api-key <key>         API key for authentication (can also use PINGERA_API_KEY env var)
---bearer-token <token>  Bearer token for authentication (can also use PINGERA_BEARER_TOKEN env var)  
 --base-url <url>        API base URL (default: https://api.pingera.ru)
 --output <format>       Output format: table, json, yaml (default: table)
 --page-id <id>          Default page ID for status page operations (can also use PINGERA_PAGE_ID env var)
@@ -32,7 +31,66 @@ pngr auth status                          # Check authentication status
 pngr auth logout                          # Clear stored credentials
 ```
 
-## Alerts Commands
+## Checks Commands
+
+### `pngr checks`
+Manage monitoring checks.
+
+```bash
+# List checks
+pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <status>]
+
+# Get specific check
+pngr checks get <check-id>
+
+# Create check
+pngr checks create --name <name> --type <type> [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--parameters <json>] [--pw-script-file <path>]
+
+# Update check
+pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--active/--inactive] [--parameters <json>] [--pw-script-file <path>]
+
+# Delete check
+pngr checks delete <check-id> [--confirm]
+
+# Get check results
+pngr checks results <check-id> [--from <date>] [--to <date>] [--page <num>] [--page-size <size>]
+
+# Get detailed result information
+pngr checks result <check-id> <result-id>
+
+# Manage on-demand check jobs
+pngr checks jobs list
+pngr checks jobs get <job-id>
+```
+
+## On-Demand Checks Commands 
+
+### `pngr checks run`
+Execute checks on demand.
+
+```bash
+# Execute custom check
+pngr checks run custom [--url <url>] --type <type> [--host <host>] [--port <port>] [--timeout <seconds>] [--name <name>] [--parameters <json>] [--pw-script-file <path>] [--wait-for-result]
+
+# Execute existing check
+pngr checks run existing <check-id> [--wait-for-result]
+
+# List on-demand checks
+pngr checks run list [--page <num>] [--page-size <size>]
+```
+
+### `pngr checks jobs`
+Manage check jobs.
+
+```bash
+# Get job result
+pngr checks jobs result <job-id>
+
+# List check jobs
+pngr checks jobs list
+```
+
+## Alerts Commands (soon)
 
 ### `pngr alerts`
 Manage alerts and notifications.
@@ -67,56 +125,7 @@ pngr alerts rules create --name <name> --conditions <json>
 pngr alerts rules delete <rule-id>
 ```
 
-## Checks Commands
-
-### `pngr checks`
-Manage monitoring checks.
-
-```bash
-# List checks
-pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <status>]
-
-# Get specific check
-pngr checks get <check-id>
-
-# Create check
-pngr checks create --name <name> --type <type> [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--parameters <json>] [--pw-script-file <path>]
-
-# Update check
-pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--active/--inactive] [--parameters <json>] [--pw-script-file <path>]
-
-# Delete check
-pngr checks delete <check-id> [--confirm]
-
-# Get check results
-pngr checks results <check-id> [--from <date>] [--to <date>] [--page <num>] [--page-size <size>]
-
-# Get detailed result information
-pngr checks result <check-id> <result-id>
-
-# Find checks by criteria
-pngr checks find --name <partial-name>
-pngr checks find --url <partial-url>
-pngr checks find --type <check-type>
-pngr checks find --name <name> --type <type>
-
-# Manage check jobs
-pngr checks jobs list
-pngr checks jobs get <job-id>
-```
-
-### `pngr checks results`
-Query unified check results.
-
-```bash
-# Get unified results
-pngr checks results unified [--check-ids <id1,id2>] [--from <date>] [--to <date>] [--status <status>] [--page <num>]
-
-# Get aggregated statistics
-pngr checks results stats [--check-ids <id1,id2>] [--from <date>] [--to <date>]
-```
-
-## Heartbeats Commands
+## Heartbeats Commands (soon)
 
 ### `pngr heartbeats`
 Manage heartbeat monitoring.
@@ -144,34 +153,7 @@ pngr heartbeats ping <heartbeat-id>
 pngr heartbeats logs <heartbeat-id> [--from <date>] [--to <date>] [--page <num>]
 ```
 
-## On-Demand Checks Commands
-
-### `pngr checks run`
-Execute checks on demand.
-
-```bash
-# Execute custom check
-pngr checks run custom [--url <url>] --type <type> [--host <host>] [--port <port>] [--timeout <seconds>] [--name <name>] [--parameters <json>] [--pw-script-file <path>] [--wait-for-result]
-
-# Execute existing check
-pngr checks run existing <check-id> [--wait-for-result]
-
-# List on-demand checks
-pngr checks run list [--page <num>] [--page-size <size>]
-```
-
-### `pngr checks jobs`
-Manage check jobs.
-
-```bash
-# Get job result
-pngr checks jobs result <job-id>
-
-# List check jobs
-pngr checks jobs list
-```
-
-## Status Pages Commands
+## Status Pages Commands (soon)
 
 ### `pngr pages`
 Manage status pages.
@@ -330,15 +312,6 @@ display:
   timestamps: "relative"  # relative, absolute, none
 ```
 
-## Command Aliases
-
-Short aliases for common commands:
-- `pngr ls` → `pngr checks list`
-- `pngr ps` → `pngr pages list`
-- `pngr cs` → `pngr components list`
-- `pngr is` → `pngr incidents list`
-- `pngr st` → `pngr components status`
-
 ## Examples
 
 ```bash
@@ -397,5 +370,3 @@ pngr checks results check_123 --from 1d
 # Export incidents as JSON
 pngr incidents list --output json > incidents.json
 ```
-
-This command structure provides comprehensive coverage of all SDK functionality while maintaining an intuitive and consistent CLI experience.
