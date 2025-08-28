@@ -11,7 +11,7 @@ A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - bui
 
 - **Beautiful Terminal Output**: Powered by Rich library for colorful, formatted output
 - **Modern CLI Interface**: Built with Typer for intuitive command-line interactions  
-- **Pingera Platform Integration**: Seamlessly integrates with Pingera SDK for network monitoring
+- **Pingera Platform Integration**: Seamlessly integrates with Pingera SDK for managing and running checks (statuspages and other coming soon)
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 - **Easy Installation**: Simple pip install with all dependencies managed
 - **Configuration Management**: Flexible configuration with environment variables and config files
