@@ -1,0 +1,1011 @@
+"""
+Checks commands for PingeraCLI
+"""
+
+import os
+from typing import Optional, List
+from datetime import datetime
+
+import typer
+from rich.table import Table
+from rich.panel import Panel
+from rich.prompt import Confirm
+
+from .base import BaseCommand
+from ..utils.config import get_api_key
+
+
+class ChecksCommand(BaseCommand):
+    """
+    Commands for managing monitoring checks
+    """
+
+    def __init__(self, output_format: Optional[str] = None):
+        super().__init__(output_format)
+
+    def get_client(self):
+        """Get Pingera SDK client with authentication"""
+        api_key = get_api_key()
+        if not api_key:
+            self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+            raise typer.Exit(1)
+
+        try:
+            from pingera import ApiClient, Configuration
+            from pingera.api import ChecksApi
+
+            # Configure the client
+            configuration = Configuration()
+            configuration.host = "https://api.pingera.ru"
+            configuration.api_key['apiKeyAuth'] = api_key
+
+            # Create API client
+            api_client = ApiClient(configuration)
+            return ChecksApi(api_client)
+        except ImportError:
+            self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
+            raise typer.Exit(1)
+        except Exception as e:
+            self.display_error(f"Failed to initialize client: {str(e)}")
+            raise typer.Exit(1)
+
+    def get_unified_results_client(self):
+        """Get Pingera SDK client for unified results with authentication"""
+        api_key = get_api_key()
+        if not api_key:
+            self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+            raise typer.Exit(1)
+
+        try:
+            from pingera import ApiClient, Configuration
+            from pingera.api import ChecksUnifiedResultsApi
+
+            # Configure the client
+            configuration = Configuration()
+            configuration.host = "https://api.pingera.ru"
+            configuration.api_key['apiKeyAuth'] = api_key
+
+            # Create API client
+            api_client = ApiClient(configuration)
+            return ChecksUnifiedResultsApi(api_client)
+        except ImportError:
+            self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
+            raise typer.Exit(1)
+        except Exception as e:
+            self.display_error(f"Failed to initialize client: {str(e)}")
+            raise typer.Exit(1)
+
+    def list_checks(self, page: int = 1, page_size: int = 20, check_type: Optional[str] = None, status: Optional[str] = None):
+        """List monitoring checks"""
+        try:
+            checks_api = self.get_client()
+
+            # Make API call using the actual SDK method
+            response = checks_api.v1_checks_get()
+
+            if not response.checks:
+                if self.output_format == 'json':
+                    self.output_data({"checks": [], "total": 0, "message": "No checks found"})
+                elif self.output_format == 'yaml':
+                    self.output_data({"checks": [], "total": 0, "message": "No checks found"})
+                else:
+                    self.display_info("No checks found.")
+                return
+
+            # Prepare data for different output formats
+            if self.output_format in ['json', 'yaml']:
+                checks_data = []
+                for check in response.checks:
+                    check_dict = {
+                        "id": str(check.id) if check.id else None,
+                        "name": check.name if check.name else None,
+                        "type": check.type if check.type else None,
+                        "url": check.url if check.url else None,
+                        "status": check.status if check.status else None,
+                        "interval": check.interval if check.interval else None,
+                        "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None
+                    }
+                    checks_data.append(check_dict)
+
+                self.output_data({
+                    "checks": checks_data,
+                    "total": len(checks_data),
+                    "page": page,
+                    "page_size": page_size
+                })
+            else:
+                # Create table for default output
+                table = Table(title=f"Monitoring Checks")
+                table.add_column("ID", style="cyan")
+                table.add_column("Name", style="green")
+                table.add_column("Type", style="blue")
+                table.add_column("URL", style="yellow")
+                table.add_column("Active", style="magenta")
+                table.add_column("Interval", style="white")
+                table.add_column("Status", style="white")
+                table.add_column("Created", style="dim")
+
+                for check in response.checks:
+                    # Convert all values to strings to avoid Rich rendering issues
+                    check_id = str(check.id) if hasattr(check, 'id') and check.id else "-"
+                    check_name = str(check.name) if hasattr(check, 'name') and check.name else "-"
+                    check_type = str(check.type) if hasattr(check, 'type') and check.type else "-"
+
+                    # Handle URL/Host display
+                    check_url = "-"
+                    if hasattr(check, 'url') and check.url:
+                        check_url = str(check.url)
+                    elif hasattr(check, 'host') and hasattr(check, 'port') and check.host and check.port:
+                        check_url = f"{check.host}:{check.port}"
+
+                    # Handle active status
+                    active_status = "✅" if hasattr(check, 'active') and check.active else "❌"
+
+                    # Handle interval
+                    interval_display = f"{check.interval}s" if hasattr(check, 'interval') and check.interval else "-"
+
+                    # Handle status
+                    status_display = str(check.status) if hasattr(check, 'status') and check.status else "-"
+
+                    # Handle created_at
+                    created_display = "-"
+                    if hasattr(check, 'created_at') and check.created_at:
+                        try:
+                            created_display = check.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                        except (AttributeError, TypeError):
+                            created_display = str(check.created_at)
+
+                    table.add_row(
+                        check_id,
+                        check_name,
+                        check_type,
+                        check_url,
+                        active_status,
+                        interval_display,
+                        status_display,
+                        created_display
+                    )
+
+                self.console.print(table)
+                self.console.print(f"\n[dim]Found {len(response.checks)} checks[/dim]")
+
+        except Exception as e:
+            self.display_error(f"Failed to list checks: {str(e)}")
+            raise typer.Exit(1)
+
+    def get_check(self, check_id: str):
+        """Get specific check details"""
+        try:
+            checks_api = self.get_client()
+            check = checks_api.v1_checks_check_id_get(check_id=check_id)
+
+            # Prepare data for different output formats
+            if self.output_format in ['json', 'yaml']:
+                check_data = {
+                    "id": str(check.id) if check.id else None,
+                    "name": check.name if check.name else None,
+                    "type": check.type if check.type else None,
+                    "status": check.status if check.status else None,
+                    "active": check.active if hasattr(check, 'active') else None,
+                    "url": check.url if check.url else None,
+                    "host": check.host if hasattr(check, 'host') and check.host else None,
+                    "port": check.port if hasattr(check, 'port') and check.port else None,
+                    "interval": check.interval if check.interval else None,
+                    "timeout": check.timeout if check.timeout else None,
+                    "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None,
+                    "updated_at": check.updated_at.isoformat() if hasattr(check, 'updated_at') and check.updated_at else None,
+                    "last_checked_at": check.last_checked_at.isoformat() if hasattr(check, 'last_checked_at') and check.last_checked_at else None,
+                    "parameters": check.parameters if hasattr(check, 'parameters') and check.parameters else None
+                }
+                self.output_data(check_data)
+            else:
+                # Rich formatted output for table format
+                status_color = "green" if check.status == "ok" else "red" if check.status == "error" else "yellow"
+                active_status = "[green]✓ Active[/green]" if check.active else "[red]✗ Inactive[/red]"
+
+                basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
+• ID: [white]{check.id}[/white]
+• Name: [white]{check.name}[/white]
+• Type: [blue]{check.type}[/blue]
+• Status: [{status_color}]{check.status}[/{status_color}]
+• Active: {active_status}
+• URL: [yellow]{check.url if check.url else 'N/A'}[/yellow]
+• Host: [white]{check.host if hasattr(check, 'host') and check.host else 'N/A'}[/white]
+• Port: [white]{check.port if hasattr(check, 'port') and check.port else 'N/A'}[/white]"""
+
+                # Timing information
+                timing_info = f"""[bold cyan]Timing & Monitoring:[/bold cyan]
+• Interval: [white]{check.interval}s[/white] ({check.interval // 60} minutes)
+• Timeout: [white]{check.timeout}s[/white]
+• Created: [white]{check.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if check.created_at else 'Unknown'}[/white]
+• Updated: [white]{check.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') if hasattr(check, 'updated_at') and check.updated_at else 'Unknown'}[/white]
+• Last Checked: [white]{check.last_checked_at.strftime('%Y-%m-%d %H:%M:%S UTC') if hasattr(check, 'last_checked_at') and check.last_checked_at else 'Never'}[/white]"""
+
+                # Parameters section
+                parameters_info = "[bold cyan]Parameters:[/bold cyan]\n"
+                if hasattr(check, 'parameters') and check.parameters:
+                    params = check.parameters
+
+                    # Handle different check types
+                    if check.type == 'web' or check.type == 'api':
+                        if 'http_request' in params:
+                            http_req = params['http_request']
+                            parameters_info += f"• Method: [white]{http_req.get('method', 'GET')}[/white]\n"
+                            if http_req.get('headers'):
+                                parameters_info += "• Headers:\n"
+                                for key, value in http_req['headers'].items():
+                                    # Mask sensitive headers
+                                    if key.lower() in ['authorization', 'x-api-key', 'token']:
+                                        value = "***" + value[-4:] if len(value) > 4 else "***"
+                                    parameters_info += f"  - {key}: [dim]{value}[/dim]\n"
+                            if http_req.get('body'):
+                                # Show more of the body content, only truncate if very long
+                                if len(http_req['body']) > 500:
+                                    body_preview = http_req['body'][:500] + "..."
+                                else:
+                                    body_preview = http_req['body']
+                                parameters_info += f"• Body: [dim]{body_preview}[/dim]\n"
+                            if http_req.get('username'):
+                                parameters_info += f"• Username: [white]{http_req['username']}[/white]\n"
+
+                        if 'search_text' in params and params['search_text']:
+                            parameters_info += f"• Search Text: [white]{params['search_text']}[/white]\n"
+
+                        if 'regions' in params:
+                            parameters_info += f"• Regions: [white]{', '.join(params['regions'])}[/white]\n"
+
+                    elif check.type == 'multistep' or check.type == 'synthetic':
+                        if 'pw_script' in params:
+                            # Display full script without truncation
+                            parameters_info += f"• Playwright Script:\n[dim]{params['pw_script']}[/dim]\n"
+                        if 'regions' in params:
+                            parameters_info += f"• Regions: [white]{', '.join(params['regions'])}[/white]\n"
+
+                    elif check.type == 'ssl':
+                        if 'assertions' in params:
+                            assertions = params['assertions']
+                            if 'expiration_threshold' in assertions:
+                                days = assertions['expiration_threshold'] // 86400
+                                parameters_info += f"• Expiration Threshold: [white]{days} days[/white]\n"
+
+                    # Show any other parameters
+                    for key, value in params.items():
+                        if key not in ['http_request', 'search_text', 'regions', 'pw_script', 'assertions']:
+                            parameters_info += f"• {key.replace('_', ' ').title()}: [white]{value}[/white]\n"
+                else:
+                    parameters_info += "• [dim]No parameters configured[/dim]"
+
+                # Combine all sections
+                full_info = f"{basic_info}\n\n{timing_info}\n\n{parameters_info}"
+
+                panel = Panel(
+                    full_info,
+                    title=f"🔍 Check Details: {check.name}",
+                    border_style="blue",
+                    padding=(1, 2),
+                )
+
+                self.console.print(panel)
+
+        except Exception as e:
+            self.display_error(f"Failed to get check: {str(e)}")
+            raise typer.Exit(1)
+
+    def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: int = 300, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None):
+        """Create a new monitoring check"""
+        try:
+            import json
+            import os
+            checks_api = self.get_client()
+
+            # Build check data
+            check_data = {
+                "name": name,
+                "type": check_type,
+                "interval": interval,
+                "timeout": timeout
+            }
+
+            # Add URL if provided (required for web, api, ssl checks)
+            if url is not None:
+                check_data["url"] = url
+
+            # Add host/port for TCP/SSL checks
+            if host is not None:
+                check_data["host"] = host
+            if port is not None:
+                check_data["port"] = port
+
+            # Handle pw_script_file option
+            params_dict = {}
+            if pw_script_file is not None:
+                if not os.path.exists(pw_script_file):
+                    self.display_error(f"Playwright script file not found: {pw_script_file}")
+                    raise typer.Exit(1)
+
+                try:
+                    with open(pw_script_file, 'r', encoding='utf-8') as f:
+                        pw_script_content = f.read().strip()
+
+                    if not pw_script_content:
+                        self.display_error(f"Playwright script file is empty: {pw_script_file}")
+                        raise typer.Exit(1)
+
+                    params_dict["pw_script"] = pw_script_content
+                    self.display_info(f"Loaded Playwright script from: {pw_script_file}")
+
+                except IOError as e:
+                    self.display_error(f"Failed to read Playwright script file: {str(e)}")
+                    raise typer.Exit(1)
+
+            # Parse parameters JSON if provided
+            if parameters is not None:
+                try:
+                    parsed_params = json.loads(parameters)
+                    # Merge with pw_script from file if both are provided
+                    params_dict.update(parsed_params)
+                except json.JSONDecodeError as e:
+                    self.display_error(f"Invalid JSON in --parameters: {str(e)}")
+                    self.display_info("Example: --parameters '{\"pw_script\": \"const { test } = require('@playwright/test'); test('example', async ({ page }) => { await page.goto('https://example.com'); });\", \"regions\": [\"US\", \"EU\"]}'")
+                    raise typer.Exit(1)
+
+            # Add parameters to check_data if we have any
+            if params_dict:
+                check_data["parameters"] = params_dict
+
+            # Validation based on check type
+            if check_type in ['web', 'api'] and not url:
+                self.display_error(f"URL is required for {check_type} checks")
+                raise typer.Exit(1)
+
+            if check_type in ['tcp'] and not host:
+                self.display_error(f"Host is required for {check_type} checks")
+                raise typer.Exit(1)
+
+            if check_type in ['ssl'] and not (url or host):
+                self.display_error(f"Either URL or host is required for {check_type} checks")
+                raise typer.Exit(1)
+
+            if check_type in ['synthetic', 'multistep'] and not params_dict.get('pw_script'):
+                self.display_error(f"Playwright script is required for {check_type} checks. Use --pw-script-file or --parameters with pw_script")
+                raise typer.Exit(1)
+
+            # Use the actual SDK method
+            check = checks_api.v1_checks_post(monitor_check=check_data)
+
+            # Build success message
+            success_details = [f"ID: {check.id}", f"Type: {check_type}"]
+            if url:
+                success_details.append(f"URL: {url}")
+            if host:
+                success_details.append(f"Host: {host}")
+            if port:
+                success_details.append(f"Port: {port}")
+            if pw_script_file:
+                success_details.append(f"Script: loaded from {pw_script_file}")
+
+            self.display_success(
+                f"Check '{name}' created successfully!\n" + "\n".join(success_details),
+                "✅ Check Created"
+            )
+
+        except Exception as e:
+            self.display_error(f"Failed to create check: {str(e)}")
+            raise typer.Exit(1)
+
+    def update_check(self, check_id: str, name: Optional[str] = None, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: Optional[int] = None, active: Optional[bool] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None):
+        """Update an existing check"""
+        try:
+            import json
+            import os
+            checks_api = self.get_client()
+
+            # Build update data
+            update_data = {}
+            if name is not None:
+                update_data["name"] = name
+            if url is not None:
+                update_data["url"] = url
+            if host is not None:
+                update_data["host"] = host
+            if port is not None:
+                update_data["port"] = port
+            if interval is not None:
+                update_data["interval"] = interval
+            if timeout is not None:
+                update_data["timeout"] = timeout
+            if active is not None:
+                update_data["active"] = active
+
+            # Handle pw_script_file option
+            params_dict = {}
+            if pw_script_file is not None:
+                if not os.path.exists(pw_script_file):
+                    self.display_error(f"Playwright script file not found: {pw_script_file}")
+                    raise typer.Exit(1)
+
+                try:
+                    with open(pw_script_file, 'r', encoding='utf-8') as f:
+                        pw_script_content = f.read().strip()
+
+                    if not pw_script_content:
+                        self.display_error(f"Playwright script file is empty: {pw_script_file}")
+                        raise typer.Exit(1)
+
+                    params_dict["pw_script"] = pw_script_content
+                    self.display_info(f"Loaded Playwright script from: {pw_script_file}")
+
+                except IOError as e:
+                    self.display_error(f"Failed to read Playwright script file: {str(e)}")
+                    raise typer.Exit(1)
+
+            # Parse parameters JSON if provided
+            if parameters is not None:
+                try:
+                    parsed_params = json.loads(parameters)
+                    # Merge with pw_script from file if both are provided
+                    params_dict.update(parsed_params)
+                except json.JSONDecodeError as e:
+                    self.display_error(f"Invalid JSON in --parameters: {str(e)}")
+                    self.display_info("Example: --parameters '{\"pw_script\": \"const { test } = require('@playwright/test'); test('example', async ({ page }) => { await page.goto('https://example.com'); });\", \"regions\": [\"US\", \"EU\"]}'")
+                    raise typer.Exit(1)
+
+            # Add parameters to update_data if we have any
+            if params_dict:
+                update_data["parameters"] = params_dict
+
+            if not update_data:
+                self.display_warning("No updates specified. Use --name, --url, --host, --port, --interval, --timeout, --active/--inactive, --parameters, or --pw-script-file to update.")
+                return
+
+            # Use the actual SDK method with the correct parameter name
+            check = checks_api.v1_checks_check_id_patch(check_id=check_id, monitor_check1=update_data)
+
+            status_msg = ""
+            if active is not None:
+                status_msg = f"\nStatus: {'Active' if active else 'Paused'}"
+
+            # Show what was updated
+            updated_fields = []
+            if name is not None:
+                updated_fields.append(f"name: {check.name}")
+            if url is not None:
+                updated_fields.append(f"url: {check.url}")
+            if host is not None:
+                updated_fields.append(f"host: {check.host}")
+            if port is not None:
+                updated_fields.append(f"port: {check.port}")
+            if interval is not None:
+                updated_fields.append(f"interval: {check.interval}s")
+            if timeout is not None:
+                updated_fields.append(f"timeout: {check.timeout}s")
+            if pw_script_file is not None:
+                updated_fields.append(f"pw_script: loaded from {pw_script_file}")
+            if parameters is not None:
+                updated_fields.append("parameters: updated")
+
+            update_summary = "\n".join([f"• {field}" for field in updated_fields]) if updated_fields else ""
+
+            self.display_success(
+                f"Check {check_id} updated successfully!\n{update_summary}{status_msg}",
+                "✅ Check Updated"
+            )
+
+        except Exception as e:
+            self.display_error(f"Failed to update check: {str(e)}")
+            raise typer.Exit(1)
+
+    def delete_check(self, check_id: str, confirm: bool = False):
+        """Delete a monitoring check"""
+        try:
+            if not confirm:
+                if not Confirm.ask(f"Are you sure you want to delete check {check_id}?"):
+                    self.console.print("[yellow]Operation cancelled.[/yellow]")
+                    return
+
+            client = self.get_client()
+            client.v1_checks_check_id_delete(check_id=check_id)
+
+            self.display_success(
+                f"Check {check_id} deleted successfully!",
+                "✅ Check Deleted"
+            )
+
+        except Exception as e:
+            self.display_error(f"Failed to delete check: {str(e)}")
+            raise typer.Exit(1)
+
+    def get_check_results(self, check_id: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None, page: int = 1, page_size: int = 20, status: Optional[str] = None, check_type: Optional[str] = None, region: Optional[str] = None):
+        """Get check results using unified results API"""
+        try:
+            unified_api = self.get_unified_results_client()
+
+            # Build parameters for the unified API call
+            params = {
+                "page": page,
+                "page_size": page_size
+            }
+
+            # Add check_id only if provided
+            if check_id:
+                params["check_id"] = check_id
+
+            # Add optional filters
+            if from_date:
+                params["start_date"] = from_date
+            if to_date:
+                params["end_date"] = to_date
+            if status:
+                params["status"] = status
+            if check_type:
+                params["check_type"] = check_type
+            if region:
+                params["region"] = region
+
+            # Use the unified results API
+            response = unified_api.v1_checks_all_results_get(**params)
+
+            if not hasattr(response, 'results') or not response.results:
+                if self.output_format in ['json', 'yaml']:
+                    self.output_data({"results": [], "total": 0, "message": "No results found"})
+                else:
+                    self.display_info("No results found.")
+                return
+
+            # Prepare data for different output formats
+            if self.output_format in ['json', 'yaml']:
+                results_data = []
+                for result in response.results:
+                    result_dict = {
+                        "id": str(result.id) if hasattr(result, 'id') and result.id else None,
+                        "check_id": result.check_id if hasattr(result, 'check_id') else None,
+                        "check_name": result.check_name if hasattr(result, 'check_name') else None,
+                        "check_type": result.check_type if hasattr(result, 'check_type') else None,
+                        "status": result.status if hasattr(result, 'status') else None,
+                        "created_at": result.created_at if hasattr(result, 'created_at') and result.created_at else None,
+                        "response_time": result.response_time if hasattr(result, 'response_time') else None,
+                        "error_message": result.error_message if hasattr(result, 'error_message') else None,
+                        "check_server_id": result.check_server_id if hasattr(result, 'check_server_id') else None,
+                        "region": result.region if hasattr(result, 'region') else None,
+                        "result_type": result.result_type if hasattr(result, 'result_type') else None,
+                        "check_metadata": result.check_metadata if hasattr(result, 'check_metadata') else None,
+                        "check_server": {
+                            "ip_address": result.check_server.ip_address if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'ip_address') else None,
+                            "country": result.check_server.country if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'country') else None,
+                            "region": result.check_server.region if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'region') else None
+                        } if hasattr(result, 'check_server') and result.check_server else None
+                    }
+                    results_data.append(result_dict)
+
+                pagination_info = {}
+                if hasattr(response, 'pagination') and response.pagination:
+                    pagination_info = {
+                        "page": response.pagination.get('page', page),
+                        "page_size": response.pagination.get('page_size', page_size),
+                        "total_items": response.pagination.get('total_items', len(results_data)),
+                        "total_pages": response.pagination.get('total_pages', 1)
+                    }
+
+                self.output_data({
+                    "results": results_data,
+                    "pagination": pagination_info if pagination_info else {"page": page, "page_size": page_size, "total_items": len(results_data)}
+                })
+
+            else:
+                # Create table for human-readable output
+                table_title = f"Check Results for {check_id}" if check_id else "All Check Results"
+                table = Table(title=table_title)
+                table.add_column("Result ID", style="dim", min_width=15)
+                table.add_column("Check/Job ID", style="cyan", min_width=15)
+                table.add_column("Timestamp", style="cyan")
+                table.add_column("Check Name", style="green", max_width=20)
+                table.add_column("Type", style="blue")
+                table.add_column("Status", style="green")
+                table.add_column("Response Time", style="yellow")
+                table.add_column("Region", style="magenta", max_width=12)
+                table.add_column("Error", style="red", max_width=25)
+
+                for result in response.results:
+                    # Extract result ID - never truncate IDs
+                    result_id = str(result.id) if hasattr(result, 'id') and result.id else "-"
+
+                    # Extract check_id or job_id based on result type - never truncate IDs
+                    check_or_job_id = "-"
+                    if hasattr(result, 'check_id') and result.check_id:
+                        check_or_job_id = str(result.check_id)
+                    elif hasattr(result, 'result_type') and result.result_type == 'on_demand':
+                        # For on-demand results, we might not have check_id, show as on-demand
+                        check_or_job_id = "[dim]on-demand[/dim]"
+
+                    # Extract timestamp
+                    timestamp = result.created_at.strftime("%m-%d %H:%M:%S") if hasattr(result, 'created_at') and result.created_at else "-"
+
+                    # Check name
+                    check_name = result.check_name if hasattr(result, 'check_name') and result.check_name else "-"
+                    if len(check_name) > 19:
+                        check_name = check_name[:19] + "…"
+
+                    # Check type
+                    check_type_display = result.check_type if hasattr(result, 'check_type') and result.check_type else "-"
+
+                    # Determine status with emoji
+                    status_emoji = "✅" if hasattr(result, 'status') and result.status == 'ok' else "❌"
+                    status_color = "green" if hasattr(result, 'status') and result.status == 'ok' else "red"
+                    status_display = f"[{status_color}]{status_emoji} {result.status}[/{status_color}]" if hasattr(result, 'status') and result.status else "-"
+
+                    # Extract response time
+                    response_time = f"{result.response_time}ms" if hasattr(result, 'response_time') and result.response_time is not None else "-"
+
+                    # Extract region
+                    region_display = result.region if hasattr(result, 'region') and result.region else "-"
+                    if len(region_display) > 11:
+                        region_display = region_display[:11] + "…"
+
+                    # Extract error message
+                    error_message = "-"
+                    if hasattr(result, 'error_message') and result.error_message:
+                        error_message = result.error_message
+                        # Truncate long error messages
+                        if len(error_message) > 24:
+                            error_message = error_message[:24] + "…"
+
+                    table.add_row(
+                        result_id,
+                        check_or_job_id,
+                        timestamp,
+                        check_name,
+                        check_type_display,
+                        status_display,
+                        response_time,
+                        region_display,
+                        error_message
+                    )
+
+                self.console.print(table)
+
+                # Show pagination info and hint about detailed view
+                if hasattr(response, 'pagination') and response.pagination:
+                    pagination = response.pagination
+                    total_items = pagination.get('total_items', len(response.results))
+                    total_pages = pagination.get('total_pages', 1)
+                    current_page = pagination.get('page', page)
+                    page_size_actual = pagination.get('page_size', page_size)
+
+                    self.console.print(f"\n[dim]Showing {len(response.results)} results • Page {current_page} of {total_pages} • {total_items} total items • {page_size_actual} per page[/dim]")
+                else:
+                    self.console.print(f"\n[dim]Found {len(response.results)} results[/dim]")
+
+                # Provide helpful hints based on context
+                hints = []
+                if check_id:
+                    hints.append(f"Use 'pngr checks result {check_id} <result-id>' for detailed result info")
+                else:
+                    hints.append("Use 'pngr checks result <check-id> <result-id>' for detailed result info")
+                    hints.append("For on-demand checks: use 'pngr checks jobs result <result-id>' for detailed info")
+                    hints.append("Use 'pngr checks list' to see all available checks and their IDs")
+                    hints.append("Filter results: --type <type>, --status <status>, --region <region>")
+
+                for hint in hints:
+                    self.console.print(f"[dim]💡 {hint}[/dim]")
+
+        except Exception as e:
+            self.display_error(f"Failed to get check results: {str(e)}")
+            raise typer.Exit(1)
+
+    def get_check_result(self, result_id: str):
+        """Get detailed information for a specific check result"""
+        try:
+            checks_api = self.get_client()
+
+            # Parse the result ID to extract check_id and check_result_id
+            # The result_id format might be "check_id:result_id" or just "result_id"
+            # We need to determine the check_id somehow - for now, we'll ask user to provide it
+
+            # Since we need both check_id and check_result_id, we'll need to modify the command
+            # For now, let's show an error and guide the user
+            self.display_error("This command needs both check ID and result ID.")
+            self.display_info("Usage: pngr checks result <check-id> <result-id>")
+            self.display_info("Or use: pngr checks results <check-id> to list all results first")
+            return
+
+        except Exception as e:
+            self.display_error(f"Failed to get result details: {str(e)}")
+            raise typer.Exit(1)
+
+    def get_check_result_detailed(self, check_id: str, result_id: str, verbose: bool = False):
+        """Get detailed information for a specific check result using check_id and result_id"""
+        try:
+            checks_api = self.get_client()
+
+            # Use the actual SDK method
+            result = checks_api.v1_checks_check_id_results_check_result_id_get(
+                check_id=check_id,
+                check_result_id=result_id
+            )
+
+            if self.output_format in ['json', 'yaml']:
+                # Full result data for JSON/YAML
+                result_data = {
+                    "id": str(result.id) if hasattr(result, 'id') else None,
+                    "check_id": result.check_id if hasattr(result, 'check_id') else None,
+                    "status": result.status if hasattr(result, 'status') else None,
+                    "created_at": result.created_at if hasattr(result, 'created_at') and result.created_at else None,
+                    "response_time": result.response_time if hasattr(result, 'response_time') else None,
+                    "error_message": result.error_message if hasattr(result, 'error_message') else None,
+                    "check_server_id": result.check_server_id if hasattr(result, 'check_server_id') else None,
+                    "check_metadata": result.check_metadata if hasattr(result, 'check_metadata') else None
+                }
+                self.output_data(result_data)
+            else:
+                # Rich formatted detailed view
+                self._display_detailed_result(result, verbose)
+
+        except Exception as e:
+            self.display_error(f"Failed to get result details: {str(e)}")
+            raise typer.Exit(1)
+
+    def _display_detailed_result(self, result, verbose: bool = False):
+        """Display detailed result information in a rich format"""
+
+        # Basic information
+        response_time_display = f"{result.response_time}ms" if hasattr(result, 'response_time') and result.response_time else 'N/A'
+        basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
+• Result ID: [white]{result.id}[/white]
+• Check ID: [white]{result.check_id}[/white]
+• Status: [{"green" if result.status == "ok" else "red"}]{result.status}[/{"green" if result.status == "ok" else "red"}]
+• Timestamp: [white]{result.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if result.created_at else 'Unknown'}[/white]
+• Response Time: [yellow]{response_time_display}[/yellow]
+• Check Server: [magenta]{result.check_server_id if result.check_server_id else 'Unknown'}[/magenta]"""
+
+        # Add check server details if available
+        if hasattr(result, 'check_server') and result.check_server:
+            server = result.check_server
+            basic_info += f"""
+• Server IP: [white]{server.ip_address if hasattr(server, 'ip_address') else 'Unknown'}[/white]
+• Server Country: [white]{server.country if hasattr(server, 'country') else 'Unknown'}[/white]
+• Server Region: [white]{server.region if hasattr(server, 'region') else 'Unknown'}[/white]"""
+
+        # Error information
+        error_info = ""
+        if hasattr(result, 'error_message') and result.error_message:
+            error_info = f"""
+[bold red]Error Information:[/bold red]
+• Error: [red]{result.error_message}[/red]"""
+
+        # Metadata analysis - handle different check types
+        metadata_info = ""
+        if hasattr(result, 'check_metadata') and result.check_metadata:
+            metadata = result.check_metadata
+
+            if isinstance(metadata, dict):
+                metadata_info = self._format_metadata_by_type(metadata, verbose)
+
+        # Combine all sections
+        full_info = basic_info
+        if error_info:
+            full_info += error_info
+        if metadata_info:
+            full_info += metadata_info
+
+        panel = Panel(
+            full_info,
+            title=f"🔍 Result Details: {result.id}",
+            border_style="blue",
+            padding=(1, 2),
+        )
+
+        self.console.print(panel)
+
+    def _format_metadata_by_type(self, metadata, verbose: bool = False):
+        """Format metadata using the appropriate formatter"""
+        from ..formatters.registry import FormatterRegistry
+        registry = FormatterRegistry(verbose)
+        return registry.format_metadata(metadata)
+
+    def list_regions(self, check_type: Optional[str] = None):
+        """List available regions for checks"""
+        try:
+            checks_api = self.get_client()
+
+            # Get regions with optional check_type filter
+            if check_type:
+                response = checks_api.v1_checks_get_regions_get(check_type=check_type)
+            else:
+                response = checks_api.v1_checks_get_regions_get()
+
+            if not hasattr(response, 'regions') or not response.regions:
+                if self.output_format in ['json', 'yaml']:
+                    self.output_data({"regions": [], "total": 0, "message": "No regions found"})
+                else:
+                    self.display_info("No regions found.")
+                return
+
+            # Prepare data for different output formats
+            if self.output_format in ['json', 'yaml']:
+                regions_data = []
+                for region in response.regions:
+                    region_dict = {
+                        "id": str(region.id) if hasattr(region, 'id') and region.id else None,
+                        "display_name": region.display_name if hasattr(region, 'display_name') and region.display_name else None,
+                        "available_check_types": region.available_check_types if hasattr(region, 'available_check_types') and region.available_check_types else None
+                    }
+                    regions_data.append(region_dict)
+
+                self.output_data({
+                    "regions": regions_data,
+                    "total": len(regions_data),
+                    "filter": {"check_type": check_type} if check_type else None
+                })
+            else:
+                # Create table for default output
+                table_title = f"Available Regions for {check_type.upper()} checks" if check_type else "Available Regions"
+                table = Table(title=table_title)
+                table.add_column("Region ID", style="cyan", min_width=15)
+                table.add_column("Display Name", style="green", min_width=25)
+                table.add_column("Available Check Types", style="white")
+
+                for region in response.regions:
+                    # Extract region data using actual SDK attributes
+                    region_id = str(region.id) if hasattr(region, 'id') and region.id else "-"
+                    display_name = region.display_name if hasattr(region, 'display_name') and region.display_name else "-"
+                    
+                    # Handle available check types
+                    available_types = "-"
+                    if hasattr(region, 'available_check_types') and region.available_check_types:
+                        if isinstance(region.available_check_types, list):
+                            available_types = ", ".join(region.available_check_types)
+                        else:
+                            available_types = str(region.available_check_types)
+
+                    table.add_row(
+                        region_id,
+                        display_name,
+                        available_types
+                    )
+
+                self.console.print(table)
+                
+                # Show summary
+                filter_text = f" for {check_type} checks" if check_type else ""
+                self.console.print(f"\n[dim]Found {len(response.regions)} regions{filter_text}[/dim]")
+
+                # Show helpful hints
+                if not check_type:
+                    self.console.print(f"[dim]💡 Filter by check type: pngr checks list-regions --type <type>[/dim]")
+                    self.console.print(f"[dim]💡 Available check types: web, api, tcp, ssl, synthetic, multistep[/dim]")
+
+        except Exception as e:
+            self.display_error(f"Failed to list regions: {str(e)}")
+            raise typer.Exit(1)
+
+# Create Typer app for checks commands
+app = typer.Typer(name="checks", help="🔍 Manage monitoring checks")
+
+
+def get_output_format():
+    """Get output format from config"""
+    from ..utils.config import get_config
+    return get_config().get('output_format', 'table')
+
+
+@app.command("list")
+def list_checks(
+    page: int = typer.Option(1, "--page", "-p", help="Page number"),
+    page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (max 100)"),
+    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type"),
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status"),
+):
+    """List monitoring checks"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.list_checks(page, page_size, check_type, status)
+
+
+@app.command("get")
+def get_check(
+    check_id: str = typer.Argument(..., help="Check ID to retrieve"),
+):
+    """Get specific check details"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.get_check(check_id)
+
+
+@app.command("create")
+def create_check(
+    name: str = typer.Option(..., "--name", "-n", help="Check name"),
+    check_type: str = typer.Option(..., "--type", "-t", help="Check type (web, api, tcp, ssl, synthetic, multistep)"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
+    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL checks (max 255 characters)"),
+    port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
+    interval: int = typer.Option(300, "--interval", "-i", help="Check interval in seconds"),
+    timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
+    parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
+    pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks")
+):
+    """Create a new monitoring check. Parameters vary by check type:
+    - web/api: --url required
+    - tcp: --host required, --port optional
+    - ssl: --url or --host required
+    - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file)
+
+
+@app.command("update")
+def update_check(
+    check_id: str = typer.Argument(..., help="Check ID to update"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="New check name"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="New URL"),
+    host: Optional[str] = typer.Option(None, "--host", help="New hostname/IP for TCP/SSL checks (max 255 characters)"),
+    port: Optional[int] = typer.Option(None, "--port", help="New port number for TCP checks (1-65535)"),
+    interval: Optional[int] = typer.Option(None, "--interval", "-i", help="New interval in seconds"),
+    timeout: Optional[int] = typer.Option(None, "--timeout", help="New timeout in seconds"),
+    active: bool = typer.Option(None, "--active/--inactive", help="Enable or disable the check"),
+    parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"pw_script\": \"...\", \"regions\": [\"US\", \"EU\"]}')"),
+    pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks")
+):
+    """Update an existing check. Use --parameters to provide complex parameters like Playwright scripts, regions, etc."""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file)
+
+
+@app.command("delete")
+def delete_check(
+    check_id: str = typer.Argument(..., help="Check ID to delete"),
+    confirm: bool = typer.Option(False, "--confirm", help="Skip confirmation prompt"),
+):
+    """Delete a monitoring check"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.delete_check(check_id, confirm)
+
+
+@app.command("results")
+def get_results(
+    check_id: Optional[str] = typer.Argument(None, help="Check ID (optional - if not provided, returns all results)"),
+    from_date: Optional[str] = typer.Option(None, "--from", help="Start date (ISO 8601) - max 6 months ago"),
+    to_date: Optional[str] = typer.Option(None, "--to", help="End date (ISO 8601)"),
+    page: int = typer.Option(1, "--page", "-p", help="Page number"),
+    page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (1-100)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status (ok, failed, degraded, timeout, pending)"),
+    check_type: Optional[str] = typer.Option(None, "--type", help="Filter by check type (web, api, tcp, ssl, synthetic, multistep)"),
+    region: Optional[str] = typer.Option(None, "--region", help="Filter by region"),
+):
+    """Get check results with advanced filtering. If no check_id is provided, returns unified results across all checks."""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.get_check_results(check_id, from_date, to_date, page, page_size, status, check_type, region)
+
+
+@app.command("result")
+def get_result(
+    check_id: str = typer.Argument(..., help="Check ID"),
+    result_id: str = typer.Argument(..., help="Result ID to retrieve detailed information for"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full detailed information including network requests"),
+):
+    """Get detailed information for a specific check result"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.get_check_result_detailed(check_id, result_id, verbose)
+
+
+@app.command("list-regions")
+def list_regions(
+    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter regions by check type (web, api, tcp, ssl, synthetic, multistep)"),
+):
+    """List available regions for monitoring checks"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.list_regions(check_type)
+
+
+
+
+
+
+
+
+
+
+
+# Import on-demand checks functionality from separate module
+from .on_demand_checks import run_app, jobs_app
+
+# Add the run and jobs subcommands to the main checks app
+app.add_typer(run_app, name="run")
+app.add_typer(jobs_app, name="jobs")

@@ -1,0 +1,401 @@
+
+# Pingera CLI Commands Specification
+
+## Overview
+
+The `pngr` CLI provides a comprehensive interface to the Pingera monitoring platform. Commands are organized into logical groups based on the SDK's API modules.
+
+## Global Options
+
+These options are available for all commands:
+
+```
+--api-key <key>         API key for authentication (can also use PINGERA_API_KEY env var)
+--bearer-token <token>  Bearer token for authentication (can also use PINGERA_BEARER_TOKEN env var)  
+--base-url <url>        API base URL (default: https://api.pingera.ru)
+--output <format>       Output format: table, json, yaml (default: table)
+--page-id <id>          Default page ID for status page operations (can also use PINGERA_PAGE_ID env var)
+--verbose, -v           Enable verbose output
+--help, -h              Show help message
+--version, -V           Show version information
+```
+
+## Authentication Commands
+
+### `pngr auth`
+Manage authentication settings.
+
+```bash
+pngr auth login --api-key <key>           # Set API key
+pngr auth login --bearer-token <token>    # Set bearer token
+pngr auth status                          # Check authentication status
+pngr auth logout                          # Clear stored credentials
+```
+
+## Alerts Commands
+
+### `pngr alerts`
+Manage alerts and notifications.
+
+```bash
+# List alerts
+pngr alerts list [--page <num>] [--page-size <size>] [--status <status>]
+
+# Get specific alert
+pngr alerts get <alert-id>
+
+# Create alert
+pngr alerts create --name <name> --type <type> [--channels <channels>] [--enabled]
+
+# Update alert
+pngr alerts update <alert-id> [--name <name>] [--enabled/--disabled]
+
+# Delete alert
+pngr alerts delete <alert-id> [--confirm]
+
+# Get alert statistics
+pngr alerts stats
+
+# Manage alert channels
+pngr alerts channels list
+pngr alerts channels create --name <name> --type <type> --config <json>
+pngr alerts channels delete <channel-id>
+
+# Manage alert rules
+pngr alerts rules list
+pngr alerts rules create --name <name> --conditions <json>
+pngr alerts rules delete <rule-id>
+```
+
+## Checks Commands
+
+### `pngr checks`
+Manage monitoring checks.
+
+```bash
+# List checks
+pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <status>]
+
+# Get specific check
+pngr checks get <check-id>
+
+# Create check
+pngr checks create --name <name> --type <type> [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--parameters <json>] [--pw-script-file <path>]
+
+# Update check
+pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--active/--inactive] [--parameters <json>] [--pw-script-file <path>]
+
+# Delete check
+pngr checks delete <check-id> [--confirm]
+
+# Get check results
+pngr checks results <check-id> [--from <date>] [--to <date>] [--page <num>] [--page-size <size>]
+
+# Get detailed result information
+pngr checks result <check-id> <result-id>
+
+# Find checks by criteria
+pngr checks find --name <partial-name>
+pngr checks find --url <partial-url>
+pngr checks find --type <check-type>
+pngr checks find --name <name> --type <type>
+
+# Manage check jobs
+pngr checks jobs list
+pngr checks jobs get <job-id>
+```
+
+### `pngr checks results`
+Query unified check results.
+
+```bash
+# Get unified results
+pngr checks results unified [--check-ids <id1,id2>] [--from <date>] [--to <date>] [--status <status>] [--page <num>]
+
+# Get aggregated statistics
+pngr checks results stats [--check-ids <id1,id2>] [--from <date>] [--to <date>]
+```
+
+## Heartbeats Commands
+
+### `pngr heartbeats`
+Manage heartbeat monitoring.
+
+```bash
+# List heartbeats
+pngr heartbeats list [--page <num>] [--page-size <size>] [--status <status>]
+
+# Get specific heartbeat
+pngr heartbeats get <heartbeat-id>
+
+# Create heartbeat
+pngr heartbeats create --name <name> --interval <seconds> [--grace-period <seconds>]
+
+# Update heartbeat
+pngr heartbeats update <heartbeat-id> [--name <name>] [--interval <seconds>]
+
+# Delete heartbeat
+pngr heartbeats delete <heartbeat-id> [--confirm]
+
+# Send heartbeat ping
+pngr heartbeats ping <heartbeat-id>
+
+# Get heartbeat logs
+pngr heartbeats logs <heartbeat-id> [--from <date>] [--to <date>] [--page <num>]
+```
+
+## On-Demand Checks Commands
+
+### `pngr checks run`
+Execute checks on demand.
+
+```bash
+# Execute custom check
+pngr checks run custom [--url <url>] --type <type> [--host <host>] [--port <port>] [--timeout <seconds>] [--name <name>] [--parameters <json>] [--pw-script-file <path>] [--wait-for-result]
+
+# Execute existing check
+pngr checks run existing <check-id> [--wait-for-result]
+
+# List on-demand checks
+pngr checks run list [--page <num>] [--page-size <size>]
+```
+
+### `pngr checks jobs`
+Manage check jobs.
+
+```bash
+# Get job result
+pngr checks jobs result <job-id>
+
+# List check jobs
+pngr checks jobs list
+```
+
+## Status Pages Commands
+
+### `pngr pages`
+Manage status pages.
+
+```bash
+# List status pages
+pngr pages list [--page <num>] [--page-size <size>]
+
+# Get specific status page
+pngr pages get <page-id>
+
+# Create status page
+pngr pages create --name <name> [--description <desc>] [--subdomain <sub>] [--theme <theme>]
+
+# Update status page
+pngr pages update <page-id> [--name <name>] [--description <desc>] [--theme <theme>]
+
+# Delete status page
+pngr pages delete <page-id> [--confirm]
+```
+
+### `pngr components`
+Manage status page components.
+
+```bash
+# List components
+pngr components list [--page-id <id>] [--page <num>] [--page-size <size>]
+
+# Get specific component
+pngr components get <component-id> [--page-id <id>]
+
+# Create component
+pngr components create --name <name> [--description <desc>] [--status <status>] [--page-id <id>]
+
+# Update component
+pngr components update <component-id> [--name <name>] [--description <desc>] [--page-id <id>]
+
+# Delete component
+pngr components delete <component-id> [--page-id <id>] [--confirm]
+
+# Update component status
+pngr components status <component-id> --status <status> [--page-id <id>]
+
+# Get component uptime
+pngr components uptime <component-id> [--page-id <id>] [--from <date>] [--to <date>]
+
+# Bulk update component uptime
+pngr components uptime-bulk --file <json-file> [--page-id <id>]
+```
+
+### `pngr incidents`
+Manage incidents and maintenance.
+
+```bash
+# List incidents
+pngr incidents list [--page-id <id>] [--page <num>] [--page-size <size>] [--status <status>]
+
+# Get specific incident
+pngr incidents get <incident-id> [--page-id <id>]
+
+# Create incident
+pngr incidents create --name <name> --body <text> --status <status> --impact <impact> [--page-id <id>]
+
+# Update incident
+pngr incidents update <incident-id> [--name <name>] [--body <text>] [--status <status>] [--page-id <id>]
+
+# Delete incident
+pngr incidents delete <incident-id> [--page-id <id>] [--confirm]
+
+# Manage incident updates
+pngr incidents updates list <incident-id> [--page-id <id>]
+pngr incidents updates create <incident-id> --body <text> --status <status> [--page-id <id>]
+pngr incidents updates get <incident-id> <update-id> [--page-id <id>]
+pngr incidents updates update <incident-id> <update-id> --body <text> [--page-id <id>]
+pngr incidents updates delete <incident-id> <update-id> [--page-id <id>] [--confirm]
+```
+
+## Configuration Commands
+
+### `pngr config`
+Manage CLI configuration.
+
+```bash
+pngr config show                          # Show current configuration
+pngr config set <key> <value>            # Set configuration value
+pngr config get <key>                    # Get configuration value
+pngr config unset <key>                  # Remove configuration value
+pngr config reset                        # Reset to defaults
+```
+
+## Utility Commands
+
+### `pngr info`
+Show system and SDK information.
+
+```bash
+pngr info                                # Show CLI and SDK information
+pngr info version                        # Show version information only
+```
+
+## Common Patterns
+
+### Filtering and Pagination
+Most list commands support:
+- `--page <num>`: Page number (default: 1)
+- `--page-size <size>`: Items per page (default: 20, max: 100)
+- `--status <status>`: Filter by status
+- `--type <type>`: Filter by type
+
+### Date Ranges
+Commands that support time-based filtering use:
+- `--from <date>`: Start date (ISO 8601 format)
+- `--to <date>`: End date (ISO 8601 format)
+
+Date formats supported:
+- ISO 8601: `2023-01-01T00:00:00Z`
+- Date only: `2023-01-01`
+- Relative: `1h`, `1d`, `1w` (ago from now)
+
+### Output Formats
+- `table`: Human-readable table (default)
+- `json`: JSON format
+- `yaml`: YAML format
+
+### Confirmation
+Destructive operations support:
+- `--confirm`: Skip confirmation prompt
+- `--dry-run`: Show what would be done without executing
+
+## Environment Variables
+
+- `PINGERA_API_KEY`: Default API key
+- `PINGERA_BEARER_TOKEN`: Default bearer token  
+- `PINGERA_PAGE_ID`: Default status page ID
+- `PINGERA_BASE_URL`: Default API base URL
+- `PNGR_OUTPUT_FORMAT`: Default output format
+- `PNGR_CONFIG_DIR`: Configuration directory
+
+## Configuration File
+
+Configuration stored in `~/.config/pngr/config.yaml`:
+
+```yaml
+auth:
+  api_key: "your-api-key"
+  bearer_token: "your-bearer-token"
+  base_url: "https://api.pingera.ru"
+
+defaults:
+  page_id: "your-default-page-id"
+  output_format: "table"
+  page_size: 20
+
+display:
+  colors: true
+  timestamps: "relative"  # relative, absolute, none
+```
+
+## Command Aliases
+
+Short aliases for common commands:
+- `pngr ls` → `pngr checks list`
+- `pngr ps` → `pngr pages list`
+- `pngr cs` → `pngr components list`
+- `pngr is` → `pngr incidents list`
+- `pngr st` → `pngr components status`
+
+## Examples
+
+```bash
+# Quick setup
+pngr auth login --api-key your-api-key-here
+pngr config set defaults.page_id your-page-id
+
+# List all active checks
+pngr checks list --status active
+
+# Create a web check
+pngr checks create --name "API Health" --type web --url https://api.example.com --interval 300
+
+# Create a TCP check
+pngr checks create --name "Database Connection" --type tcp --host db.example.com --port 5432
+
+# Create a synthetic check with Playwright script
+pngr checks create --name "Login Flow" --type synthetic --pw-script-file ./scripts/login-test.js --parameters '{"regions": ["US", "EU"]}'
+
+# Create an SSL certificate check
+pngr checks create --name "SSL Monitor" --type ssl --url https://example.com
+
+# Run an on-demand web check
+pngr checks run custom --url https://example.com --type web --timeout 30
+
+# Run an on-demand TCP check and wait for result
+pngr checks run custom --host db.example.com --port 5432 --type tcp --name "Database Connection Test" --wait-for-result
+
+# Run an on-demand synthetic check with Playwright script and wait for result
+pngr checks run custom --type synthetic --pw-script-file ./scripts/login-test.js --name "Login Flow Test" --parameters '{"regions": ["US", "EU"]}' --wait-for-result
+
+# Run an on-demand SSL certificate check
+pngr checks run custom --url https://example.com --type ssl --name "SSL Certificate Test"
+
+# Execute existing check and wait for result
+pngr checks run existing check_123 --wait-for-result
+
+# Create an incident
+pngr incidents create --name "Database Issues" --body "Investigating connectivity" --status investigating --impact major
+
+# Update component status  
+pngr components status comp_123 --status degraded_performance
+
+# Update check with custom parameters (Playwright script and regions)
+pngr checks update check_123 --parameters '{"pw_script": "const { test, expect } = require(\"@playwright/test\"); test(\"example\", async ({ page }) => { await page.goto(\"https://example.com\"); await expect(page).toHaveTitle(/Example/); });", "regions": ["US", "EU"]}'
+
+# Update check with Playwright script from file
+pngr checks update check_123 --pw-script-file ./scripts/my-test.js --parameters '{"regions": ["US", "EU"]}'
+
+# Update check interval and make it active
+pngr checks update check_123 --interval 600 --active
+
+# Get check results for last 24 hours
+pngr checks results check_123 --from 1d
+
+# Export incidents as JSON
+pngr incidents list --output json > incidents.json
+```
+
+This command structure provides comprehensive coverage of all SDK functionality while maintaining an intuitive and consistent CLI experience.

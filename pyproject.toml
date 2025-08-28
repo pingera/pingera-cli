@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pingera-cli"
+dynamic = ["version"]
+description = "A beautiful Python CLI tool built with typer and rich, distributed via pip and based on Pingera SDK"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Pingera Team", email = "privet@pingera.ru"},
+]
+maintainers = [
+    {name = "Pingera Team", email = "privet@pingera.ru"},
+]
+keywords = ["cli", "pingera", "network", "monitoring", "typer", "rich", "terminal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+    "Environment :: Console",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "typer[all]>=0.9.0",
+    "rich>=13.0.0",
+    "pingera-sdk",
+    "click>=8.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/pingera/pingera-cli"
+Documentation = "https://docs.pingera.com/cli"
+Repository = "https://github.com/pingera/pingera-cli"
+"Bug Tracker" = "https://github.com/pingera/pingera-cli/issues"
+
+[project.scripts]
+pngr = "pingera_cli.main:cli_entry_point"
+
+[tool.setuptools]
+packages = ["pingera_cli", "pingera_cli.commands", "pingera_cli.utils"]
+
+[tool.setuptools_scm]
+write_to = "pingera_cli/_version.py"
+
+[tool.black]
+line-length = 100
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.7"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "pingera_sdk.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers"
+testpaths = [
+    "tests",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
