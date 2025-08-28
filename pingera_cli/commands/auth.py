@@ -22,7 +22,7 @@ class AuthCommand(BaseCommand):
         super().__init__()
         self.app = typer.Typer(
             name="auth",
-            help="🔐 Manage authentication settings",
+            help="🔐 Manage authentication settings\n\n💡 Get your API key at: https://app.pingera.ru",
             no_args_is_help=True,
         )
 
