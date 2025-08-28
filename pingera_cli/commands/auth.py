@@ -219,14 +219,20 @@ API Key: ✗ Not set
         """
         try:
             # Import here to avoid circular imports and handle missing SDK gracefully
-            from pingera import ApiClient
+            from pingera import ApiClient, Configuration
+            from pingera.api import ChecksApi
             from pingera.exceptions import UnauthorizedException
 
-            # Create client and make a simple test request
-            client = ApiClient.from_api_key(api_key)
+            # Configure the client (same pattern as checks command)
+            configuration = Configuration()
+            configuration.host = "https://api.pingera.ru"
+            configuration.api_key['apiKeyAuth'] = api_key
+
+            # Create API client
+            api_client = ApiClient(configuration)
+            checks_api = ChecksApi(api_client)
 
             # Make a lightweight test request to validate the API key
-            checks_api = client.checks
             checks_api.v1_checks_get()
 
             return "[green]✅ Valid[/green]"
