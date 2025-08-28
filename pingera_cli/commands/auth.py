@@ -120,7 +120,7 @@ Status: [green]Active[/green]
 
                 # Validate API key
                 validation_status = self._validate_api_key(active_api_key)
-                status_content += f"\nAPI Status: {validation_status}"
+                status_content += f"\nAPI Key Check: {validation_status}"
 
             else:
                 status_content = """
