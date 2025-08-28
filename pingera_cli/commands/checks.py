@@ -879,7 +879,7 @@ class ChecksCommand(BaseCommand):
             raise typer.Exit(1)
 
 # Create Typer app for checks commands
-app = typer.Typer(name="checks", help="🔍 Manage monitoring checks")
+app = typer.Typer(name="checks", help="🔍 Manage monitoring checks", no_args_is_help=True)
 
 
 def get_output_format():
