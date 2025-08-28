@@ -119,7 +119,7 @@ pngr checks list --output yaml
 
 - **Pingera Platform**: [https://pingera.ru](https://pingera.ru)
 - **Web Application**: [https://app.pingera.ru](https://app.pingera.ru)
-- **Documentation**: [https://docs.pingera.com](https://docs.pingera.com)
+- **Documentation**: [https://docs.pingera.ru](https://docs.pingera.ru)
 
 ## 🛠️ Development
 
@@ -149,5 +149,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/pingera/pingera-cli/issues)
-- **Documentation**: [Pingera CLI Docs](https://docs.pingera.com/cli)
+- **Documentation**: [Pingera CLI Docs](https://docs.pingera.ru/devs/cli)
 - **Platform Support**: [app.pingera.ru](https://app.pingera.ru)
