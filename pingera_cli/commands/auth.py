@@ -65,8 +65,12 @@ class AuthCommand(BaseCommand):
             # Test the API key by making a simple request
             self.console.print("🔍 Validating API key...")
 
-            # For now, we'll skip API validation since we need to implement the client first
-            # TODO: Add actual API key validation with Pingera SDK
+            validation_status = self._validate_api_key(api_key.strip())
+            self.console.print(f"API Key Status: {validation_status}")
+
+            if "[red]❌ Invalid or expired[/red]" in validation_status:
+                self.console.print("[red]Please check your API key and try again.[/red]")
+                raise typer.Exit(1)
 
             # Save API key to config
             if set_api_key(api_key.strip()):
@@ -114,15 +118,9 @@ Status: [green]Active[/green]
 [dim]Note: Environment variable takes precedence over config file.[/dim]
                 """
 
-                # TODO: Add API key validation request here
-                # Example:
-                # try:
-                #     # Test API key with a simple request
-                #     client = PingeraClient.from_api_key(active_api_key)
-                #     # Make a test request
-                #     status_content += "\n[bold]API Status:[/bold] [green]✅ Valid[/green]"
-                # except Exception as e:
-                #     status_content += f"\n[bold]API Status:[/bold] [red]❌ Invalid ({str(e)})[/red]"
+                # Validate API key
+                validation_status = self._validate_api_key(active_api_key)
+                status_content += f"\nAPI Status: {validation_status}"
 
             else:
                 status_content = """
@@ -208,6 +206,42 @@ API Key: ✗ Not set
         except Exception as e:
             self.display_error(f"Logout failed: {str(e)}")
             raise typer.Exit(1)
+
+    def _validate_api_key(self, api_key: str) -> str:
+        """
+        Validate API key by making a test request
+
+        Args:
+            api_key: The API key to validate
+
+        Returns:
+            str: Formatted status message
+        """
+        try:
+            # Import here to avoid circular imports and handle missing SDK gracefully
+            from pingera import ApiClient
+            from pingera.exceptions import UnauthorizedException
+
+            # Create client and make a simple test request
+            client = ApiClient.from_api_key(api_key)
+
+            # Make a lightweight test request to validate the API key
+            checks_api = client.checks
+            checks_api.v1_checks_get()
+
+            return "[green]✅ Valid[/green]"
+
+        except ImportError:
+            return "[yellow]⚠ Cannot validate (Pingera SDK not available)[/yellow]"
+        except UnauthorizedException:
+            return "[red]❌ Invalid or expired[/red]"
+        except Exception as e:
+            # Handle other API errors gracefully
+            error_msg = str(e).lower()
+            if "network" in error_msg or "connection" in error_msg or "timeout" in error_msg:
+                return "[yellow]⚠ Cannot validate (network error)[/yellow]"
+            else:
+                return f"[yellow]⚠ Cannot validate ({str(e)})[/yellow]"
 
 
 # Create the auth command instance
