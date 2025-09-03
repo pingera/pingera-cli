@@ -38,7 +38,7 @@ Manage monitoring checks.
 
 ```bash
 # List checks
-pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <status>]
+pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <status>] [--name <name>] [--group-id <id>]
 
 # Get specific check
 pngr checks get <check-id>
@@ -52,6 +52,9 @@ pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--p
 # Delete check
 pngr checks delete <check-id> [--confirm]
 
+# Assign check to group
+pngr checks assign-group <check-id> [--group-id <group-id>]
+
 # Get check results
 pngr checks results <check-id> [--from <date>] [--to <date>] [--page <num>] [--page-size <size>]
 
@@ -61,6 +64,29 @@ pngr checks result <check-id> <result-id>
 # Manage on-demand check jobs
 pngr checks jobs list
 pngr checks jobs get <job-id>
+```
+
+### `pngr checks groups`
+Manage check groups for organizing checks.
+
+```bash
+# List check groups
+pngr checks groups list [--page <num>] [--page-size <size>]
+
+# Get specific group
+pngr checks groups get <group-id>
+
+# Create group
+pngr checks groups create --name <name> [--description <desc>] [--color <hex>] [--position <num>] [--active/--inactive]
+
+# Update group
+pngr checks groups update <group-id> [--name <name>] [--description <desc>] [--color <hex>] [--position <num>] [--active/--inactive]
+
+# Delete group
+pngr checks groups delete <group-id> [--confirm]
+
+# Get checks in a group
+pngr checks groups checks <group-id> [--page <num>] [--page-size <size>]
 ```
 
 ## On-Demand Checks Commands 
@@ -366,6 +392,30 @@ pngr checks update check_123 --interval 600 --active
 
 # Get check results for last 24 hours
 pngr checks results check_123 --from 1d
+
+# List all check groups
+pngr checks groups list
+
+# Create a new check group
+pngr checks groups create --name "Production APIs" --description "Critical production API endpoints" --color "#FF5733" --position 1
+
+# Get specific group details
+pngr checks groups get group_123
+
+# Update a group
+pngr checks groups update group_123 --name "Updated Group Name" --color "#4F46E5"
+
+# Delete a group
+pngr checks groups delete group_123
+
+# Get checks in a specific group
+pngr checks groups checks group_123
+
+# Assign a check to a group
+pngr checks assign-group check_123 --group-id group_456
+
+# Remove check from group
+pngr checks assign-group check_123 --group-id null
 
 # Export incidents as JSON
 pngr incidents list --output json > incidents.json

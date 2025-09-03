@@ -77,6 +77,21 @@ pngr checks run custom \
   --name "Quick Test"
 ```
 
+### Manage check groups
+```bash
+# List all check groups
+pngr checks groups list
+
+# Create a new group
+pngr checks groups create \
+  --name "Production APIs" \
+  --description "Critical production endpoints" \
+  --color "#FF5733"
+
+# Assign a check to a group
+pngr checks assign-group check_123 --group-id group_456
+```
+
 ### List available regions
 ```bash
 pngr checks list-regions

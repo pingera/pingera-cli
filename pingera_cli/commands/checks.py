@@ -976,6 +976,51 @@ class ChecksCommand(BaseCommand):
             self.display_error(f"Failed to list regions: {str(e)}")
             raise typer.Exit(1)
 
+    def assign_check_to_group(self, check_id: str, group_id: Optional[str] = None):
+        """Assign a check to a group or remove it from a group"""
+        try:
+            # Get the CheckGroupsApi client for group assignment
+            api_key = get_api_key()
+            if not api_key:
+                self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+                raise typer.Exit(1)
+
+            try:
+                from pingera import ApiClient, Configuration
+                from pingera.api import CheckGroupsApi
+
+                # Configure the client
+                configuration = Configuration()
+                configuration.host = "https://api.pingera.ru"
+                configuration.api_key['apiKeyAuth'] = api_key
+
+                # Create API client
+                api_client = ApiClient(configuration)
+                groups_api = CheckGroupsApi(api_client)
+            except ImportError:
+                self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
+                raise typer.Exit(1)
+
+            # Prepare assignment data
+            if group_id == "null" or group_id == "none":
+                assignment_data = {"group_id": None}
+                action_msg = "removed from group"
+            else:
+                assignment_data = {"group_id": group_id}
+                action_msg = f"assigned to group {group_id}"
+
+            # Use the actual SDK method
+            result = groups_api.v1_checks_check_id_group_patch(check_id=check_id, generated=assignment_data)
+
+            self.display_success(
+                f"Check {check_id} {action_msg} successfully!",
+                "✅ Group Assignment Updated"
+            )
+
+        except Exception as e:
+            self.display_error(f"Failed to assign check to group: {str(e)}")
+            raise typer.Exit(1)
+
 # Create Typer app for checks commands
 app = typer.Typer(name="checks", help="🔍 Manage monitoring checks", no_args_is_help=True)
 
@@ -1113,6 +1158,16 @@ def list_regions(
     checks_cmd.list_regions(check_type)
 
 
+@app.command("assign-group")
+def assign_check_to_group(
+    check_id: str = typer.Argument(..., help="Check ID to assign"),
+    group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Group ID to assign check to (use 'null' to remove from group)"),
+):
+    """Assign a check to a group or remove it from a group"""
+    checks_cmd = ChecksCommand(get_output_format())
+    checks_cmd.assign_check_to_group(check_id, group_id)
+
+
 
 
 
@@ -1125,6 +1180,10 @@ def list_regions(
 # Import on-demand checks functionality from separate module
 from .on_demand_checks import run_app, jobs_app
 
-# Add the run and jobs subcommands to the main checks app
+# Import check groups functionality
+from .check_groups import app as groups_app
+
+# Add the run, jobs, and groups subcommands to the main checks app
 app.add_typer(run_app, name="run")
 app.add_typer(jobs_app, name="jobs")
+app.add_typer(groups_app, name="groups")
