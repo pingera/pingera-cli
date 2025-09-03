@@ -522,7 +522,7 @@ def delete_group(
     groups_cmd.delete_group(group_id, confirm)
 
 
-@app.command("checks")
+@app.command("list-checks")
 def get_group_checks(
     group_id: str = typer.Argument(..., help="Group ID to get checks for"),
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
