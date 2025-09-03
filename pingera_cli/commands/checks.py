@@ -75,13 +75,29 @@ class ChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def list_checks(self, page: int = 1, page_size: int = 20, check_type: Optional[str] = None, status: Optional[str] = None):
+    def list_checks(self, page: int = 1, page_size: int = 20, check_type: Optional[str] = None, status: Optional[str] = None, name: Optional[str] = None, group_id: Optional[str] = None):
         """List monitoring checks"""
         try:
             checks_api = self.get_client()
 
-            # Make API call using the actual SDK method
-            response = checks_api.v1_checks_get()
+            # Build parameters for the API call
+            params = {
+                "page": page,
+                "page_size": page_size
+            }
+            
+            # Add optional filters
+            if check_type:
+                params["type"] = check_type
+            if status:
+                params["status"] = status
+            if name:
+                params["name"] = name
+            if group_id:
+                params["group_id"] = group_id
+
+            # Make API call using the actual SDK method with filters
+            response = checks_api.v1_checks_get(**params)
 
             if not response.checks:
                 if self.output_format == 'json':
@@ -121,8 +137,25 @@ class ChecksCommand(BaseCommand):
                     "page_size": page_size
                 })
             else:
+                # Build title with applied filters
+                title_parts = ["Monitoring Checks"]
+                filters_applied = []
+                if check_type:
+                    filters_applied.append(f"type={check_type}")
+                if status:
+                    filters_applied.append(f"status={status}")
+                if name:
+                    filters_applied.append(f"name='{name}'")
+                if group_id:
+                    filters_applied.append(f"group={group_id}")
+                
+                if filters_applied:
+                    title_parts.append(f"({', '.join(filters_applied)})")
+                
+                table_title = " ".join(title_parts)
+                
                 # Create table for default output
-                table = Table(title=f"Monitoring Checks")
+                table = Table(title=table_title)
                 table.add_column("ID", style="cyan")
                 table.add_column("Name", style="green")
                 table.add_column("Group", style="magenta", max_width=20)
@@ -194,7 +227,20 @@ class ChecksCommand(BaseCommand):
                     )
 
                 self.console.print(table)
-                self.console.print(f"\n[dim]Found {len(response.checks)} checks[/dim]")
+                
+                # Show result summary with filter info
+                summary_parts = [f"Found {len(response.checks)} checks"]
+                if page > 1:
+                    summary_parts.append(f"on page {page}")
+                if filters_applied:
+                    summary_parts.append(f"with filters: {', '.join(filters_applied)}")
+                
+                self.console.print(f"\n[dim]{' '.join(summary_parts)}[/dim]")
+                
+                # Show helpful hints for filtering
+                if not any([check_type, status, name, group_id]):
+                    self.console.print(f"[dim]💡 Filter checks: --type <type>, --status <status>, --name <name>, --group-id <id>[/dim]")
+                    self.console.print(f"[dim]💡 Multiple statuses: --status 'ok,failed'[/dim]")
 
         except Exception as e:
             self.display_error(f"Failed to list checks: {str(e)}")
@@ -944,12 +990,33 @@ def get_output_format():
 def list_checks(
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
     page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (max 100)"),
-    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type"),
-    status: Optional[str] = typer.Option(None, "--status", help="Filter by status"),
+    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type (web, api, ssl, tcp, synthetic, multistep)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Filter by status. Multiple statuses can be separated by commas (e.g., 'ok,failed')"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Filter by name using case-insensitive partial matching (max 100 chars)"),
+    group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Filter by group ID"),
 ):
-    """List monitoring checks"""
+    """List monitoring checks with advanced filtering options"""
+    # Validate name length
+    if name and len(name) > 100:
+        typer.echo("Error: Name filter cannot exceed 100 characters", err=True)
+        raise typer.Exit(1)
+    
+    # Validate check type
+    if check_type and check_type not in ["web", "api", "ssl", "tcp", "synthetic", "multistep"]:
+        typer.echo("Error: Invalid check type. Must be one of: web, api, ssl, tcp, synthetic, multistep", err=True)
+        raise typer.Exit(1)
+    
+    # Validate status values if provided
+    if status:
+        valid_statuses = ["ok", "failed", "degraded", "timeout", "pending", "paused"]
+        status_list = [s.strip() for s in status.split(",")]
+        for s in status_list:
+            if s not in valid_statuses:
+                typer.echo(f"Error: Invalid status '{s}'. Must be one of: {', '.join(valid_statuses)}", err=True)
+                raise typer.Exit(1)
+    
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.list_checks(page, page_size, check_type, status)
+    checks_cmd.list_checks(page, page_size, check_type, status, name, group_id)
 
 
 @app.command("get")
