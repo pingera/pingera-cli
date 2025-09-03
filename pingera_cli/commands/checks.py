@@ -103,7 +103,14 @@ class ChecksCommand(BaseCommand):
                         "url": check.url if check.url else None,
                         "status": check.status if check.status else None,
                         "interval": check.interval if check.interval else None,
-                        "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None
+                        "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None,
+                        "group_id": check.group_id if hasattr(check, 'group_id') else None,
+                        "group": {
+                            "id": check.group.id if hasattr(check, 'group') and check.group and hasattr(check.group, 'id') else None,
+                            "name": check.group.name if hasattr(check, 'group') and check.group and hasattr(check.group, 'name') else None,
+                            "color": check.group.color if hasattr(check, 'group') and check.group and hasattr(check.group, 'color') else None,
+                            "description": check.group.description if hasattr(check, 'group') and check.group and hasattr(check.group, 'description') else None
+                        } if hasattr(check, 'group') and check.group else None
                     }
                     checks_data.append(check_dict)
 
@@ -118,6 +125,7 @@ class ChecksCommand(BaseCommand):
                 table = Table(title=f"Monitoring Checks")
                 table.add_column("ID", style="cyan")
                 table.add_column("Name", style="green")
+                table.add_column("Group", style="magenta", max_width=20)
                 table.add_column("Type", style="blue")
                 table.add_column("URL", style="yellow")
                 table.add_column("Active", style="magenta")
@@ -130,6 +138,24 @@ class ChecksCommand(BaseCommand):
                     check_id = str(check.id) if hasattr(check, 'id') and check.id else "-"
                     check_name = str(check.name) if hasattr(check, 'name') and check.name else "-"
                     check_type = str(check.type) if hasattr(check, 'type') and check.type else "-"
+
+                    # Handle group display
+                    group_display = "-"
+                    if hasattr(check, 'group') and check.group and hasattr(check.group, 'name'):
+                        group_name = str(check.group.name)
+                        # Truncate long group names
+                        if len(group_name) > 19:
+                            group_display = group_name[:19] + "…"
+                        else:
+                            group_display = group_name
+                        
+                        # Add color if available
+                        if hasattr(check.group, 'color') and check.group.color:
+                            # Use the group color for the group name display
+                            group_display = f"[{check.group.color}]●[/{check.group.color}] {group_display}"
+                    elif hasattr(check, 'group_id') and check.group_id:
+                        # If we have group_id but no group object, show the ID
+                        group_display = f"[dim]{check.group_id}[/dim]"
 
                     # Handle URL/Host display
                     check_url = "-"
@@ -158,6 +184,7 @@ class ChecksCommand(BaseCommand):
                     table.add_row(
                         check_id,
                         check_name,
+                        group_display,
                         check_type,
                         check_url,
                         active_status,
@@ -195,7 +222,18 @@ class ChecksCommand(BaseCommand):
                     "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None,
                     "updated_at": check.updated_at.isoformat() if hasattr(check, 'updated_at') and check.updated_at else None,
                     "last_checked_at": check.last_checked_at.isoformat() if hasattr(check, 'last_checked_at') and check.last_checked_at else None,
-                    "parameters": check.parameters if hasattr(check, 'parameters') and check.parameters else None
+                    "parameters": check.parameters if hasattr(check, 'parameters') and check.parameters else None,
+                    "group_id": check.group_id if hasattr(check, 'group_id') else None,
+                    "group": {
+                        "id": check.group.id if hasattr(check, 'group') and check.group and hasattr(check.group, 'id') else None,
+                        "name": check.group.name if hasattr(check, 'group') and check.group and hasattr(check.group, 'name') else None,
+                        "color": check.group.color if hasattr(check, 'group') and check.group and hasattr(check.group, 'color') else None,
+                        "description": check.group.description if hasattr(check, 'group') and check.group and hasattr(check.group, 'description') else None,
+                        "position": check.group.position if hasattr(check, 'group') and check.group and hasattr(check.group, 'position') else None,
+                        "active": check.group.active if hasattr(check, 'group') and check.group and hasattr(check.group, 'active') else None,
+                        "created_at": check.group.created_at.isoformat() if hasattr(check, 'group') and check.group and hasattr(check.group, 'created_at') and check.group.created_at else None,
+                        "updated_at": check.group.updated_at.isoformat() if hasattr(check, 'group') and check.group and hasattr(check.group, 'updated_at') and check.group.updated_at else None
+                    } if hasattr(check, 'group') and check.group else None
                 }
                 self.output_data(check_data)
             else:
@@ -203,10 +241,24 @@ class ChecksCommand(BaseCommand):
                 status_color = "green" if check.status == "ok" else "red" if check.status == "error" else "yellow"
                 active_status = "[green]✓ Active[/green]" if check.active else "[red]✗ Inactive[/red]"
 
+                # Handle group information
+                group_info = ""
+                if hasattr(check, 'group') and check.group:
+                    group_name = check.group.name if hasattr(check.group, 'name') else 'Unknown'
+                    group_color = check.group.color if hasattr(check.group, 'color') and check.group.color else 'white'
+                    group_desc = check.group.description if hasattr(check.group, 'description') and check.group.description else ''
+                    
+                    group_info = f"• Group: [{group_color}]● {group_name}[/{group_color}]"
+                    if group_desc:
+                        group_info += f" [dim]({group_desc})[/dim]"
+                    group_info += "\n"
+                elif hasattr(check, 'group_id') and check.group_id:
+                    group_info = f"• Group ID: [white]{check.group_id}[/white]\n"
+
                 basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
 • ID: [white]{check.id}[/white]
 • Name: [white]{check.name}[/white]
-• Type: [blue]{check.type}[/blue]
+{group_info}• Type: [blue]{check.type}[/blue]
 • Status: [{status_color}]{check.status}[/{status_color}]
 • Active: {active_status}
 • URL: [yellow]{check.url if check.url else 'N/A'}[/yellow]
