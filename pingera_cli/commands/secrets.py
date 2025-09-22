@@ -57,18 +57,20 @@ class SecretsCommand(BaseCommand):
             # Make API call
             response = secrets_api.v1_secrets_get(page=page, page_size=page_size)
             
-            # Handle tuple response (data, response_info)
+            # Handle tuple response (data, pagination_info)
             if isinstance(response, tuple):
-                secrets = response[0]  # First element is the data
+                secrets = response[0]  # First element is the secrets list
+                pagination = response[1] if len(response) > 1 else {}
             else:
                 secrets = response
+                pagination = {}
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
                 # Convert to dict for JSON/YAML output
                 secrets_data = {
                     'secrets': [secret.to_dict() for secret in secrets],
-                    'pagination': {
+                    'pagination': pagination if pagination else {
                         'page': page,
                         'page_size': page_size,
                         'total': len(secrets)
@@ -99,8 +101,14 @@ class SecretsCommand(BaseCommand):
 
                 console.print(table)
                 
-                # Show total count
-                console.print(f"\n[dim]Found {len(secrets)} secrets[/dim]")
+                # Show pagination info
+                if pagination and pagination.get('total_pages', 1) > 1:
+                    current_page = pagination.get('page', page)
+                    total_pages = pagination.get('total_pages', 1)
+                    total_items = pagination.get('total_items', len(secrets))
+                    console.print(f"\n[dim]Page {current_page} of {total_pages} ({total_items} total secrets)[/dim]")
+                else:
+                    console.print(f"\n[dim]Found {len(secrets)} secrets[/dim]")
 
         except Exception as e:
             self.display_error(f"Failed to list secrets: {str(e)}")
