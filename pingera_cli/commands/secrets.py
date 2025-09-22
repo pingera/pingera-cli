@@ -55,35 +55,34 @@ class SecretsCommand(BaseCommand):
             secrets_api = self.get_client()
             
             # Make API call
-            response = secrets_api.v1_secrets_get(page=page, page_size=page_size)
+            secrets = secrets_api.v1_secrets_get(page=page, page_size=page_size)
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
                 # Convert to dict for JSON/YAML output
                 secrets_data = {
-                    'secrets': [secret.to_dict() for secret in response.items],
+                    'secrets': [secret.to_dict() for secret in secrets],
                     'pagination': {
-                        'page': response.page,
-                        'page_size': response.page_size,
-                        'total': response.total,
-                        'total_pages': response.total_pages
+                        'page': page,
+                        'page_size': page_size,
+                        'total': len(secrets)
                     }
                 }
                 self.output_data(secrets_data)
             else:
                 # Table format
-                if not response.items:
+                if not secrets:
                     self.display_info("No secrets found")
                     return
 
-                table = Table(title=f"Organization Secrets (Page {response.page} of {response.total_pages})")
+                table = Table(title="Organization Secrets")
                 table.add_column("ID", style="cyan")
                 table.add_column("Name", style="white")
                 table.add_column("Created At", style="dim")
                 table.add_column("Updated At", style="dim")
                 table.add_column("Created By", style="dim")
 
-                for secret in response.items:
+                for secret in secrets:
                     table.add_row(
                         secret.id or '',
                         secret.secret_name or '',
@@ -94,9 +93,8 @@ class SecretsCommand(BaseCommand):
 
                 console.print(table)
                 
-                # Show pagination info
-                if response.total_pages > 1:
-                    console.print(f"\n[dim]Showing {len(response.items)} of {response.total} secrets[/dim]")
+                # Show total count
+                console.print(f"\n[dim]Found {len(secrets)} secrets[/dim]")
 
         except Exception as e:
             self.display_error(f"Failed to list secrets: {str(e)}")
