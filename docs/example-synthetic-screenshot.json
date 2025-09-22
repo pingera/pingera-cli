@@ -1,21 +1,21 @@
-
 {
   "name": "Website Screenshot Monitor",
-  "type": "synthetic", 
+  "type": "synthetic",
   "interval": 1800,
-  "timeout": 120,
+  "timeout": 30,
   "parameters": {
-    "regions": ["RU, ", "EU"],
-    "pw_script": "const { test, expect } = require('@playwright/test');\n\ntest('website screenshot test', async ({ page }) => {\n  // Navigate to the website\n  await page.goto('https://example.com');\n  \n  // Wait for the page to fully load\n  await page.waitForLoadState('load');\n  \n  // Additional wait to ensure all dynamic content is loaded\n  await page.waitForTimeout(2000);\n  \n  // Take a full page screenshot\n  await page.screenshot({ \n    path: 'website-screenshot.png', \n    fullPage: true \n  });\n  \n  // Verify the page loaded successfully\n  await expect(page).toHaveTitle(/Example/);\n  \n  // Check for key elements on the page\n  await expect(page.locator('h1')).toBeVisible();\n  \n  console.log('Screenshot captured and page verified successfully');\n});",
-    "viewport": {
-      "width": 1920,
-      "height": 1080
-    }
+    "regions": [
+      "RU, Moscow"
+    ],
+    "pw_script": "const { test, expect } = require('@playwright/test');\n\ntest('website screenshot test', async ({ page }) => {\n  // Navigate to the website\n  await page.goto('https://pingera.ru');\n  \n  // Wait for the page to fully load\n  await page.waitForLoadState('load');\n  \n  // Additional wait to ensure all dynamic content is loaded\n  await page.waitForTimeout(2000);\n  \n  // Take a full page screenshot\n  await page.screenshot({ \n    path: 'website-screenshot.png', \n    fullPage: true \n  });\n  \n  // Verify the page loaded successfully\n  await expect(page).toHaveTitle(/Example/);\n  \n  // Check for key elements on the page\n  await expect(page.locator('h1')).toBeVisible();\n  \n  console.log('Screenshot captured and page verified successfully');\n});"
   },
   "marketplace": {
-    "tags": ["screenshot", "visual-monitoring", "website-monitoring"],
+    "tags": [
+      "screenshot",
+      "visual-monitoring",
+      "website-monitoring"
+    ],
     "name": "Website Screenshot Monitor",
-    "description": "Captures full-page screenshots of websites and verifies page loading",
-    "category": "visual-testing"
+    "description": "Captures full-page screenshots of websites and verifies page loading"
   }
 }

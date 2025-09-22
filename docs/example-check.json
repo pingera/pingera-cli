@@ -6,7 +6,7 @@
   "interval": 300,
   "timeout": 30,
   "parameters": {
-    "regions": ["US", "EU"],
+    "regions": ["RU, Moscow", "EU, West"],
     "search_text": "Welcome",
     "http_request": {
       "method": "GET",
@@ -14,5 +14,10 @@
         "User-Agent": "PingeraCLI/1.0"
       }
     }
+  },
+  "marketplace": {
+    "tags": ["web", "basic"],
+    "name": "Simple website check with string search",
+    "description": "Queries website URL and searches for a string in the response",
   }
 }
