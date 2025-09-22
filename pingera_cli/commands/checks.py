@@ -576,8 +576,10 @@ class ChecksCommand(BaseCommand):
             # Use the actual SDK method
             check = checks_api.v1_checks_post(monitor_check=check_data)
 
-            # Build success message
-            success_details = [f"ID: {check.id}", f"Type: {check_type}"]
+            # Build success message - use the actual name from check_data, not the parameter
+            actual_name = check_data.get("name", name)
+            actual_type = check_data.get("type", check_type)
+            success_details = [f"ID: {check.id}", f"Type: {actual_type}"]
             if url:
                 success_details.append(f"URL: {url}")
             if host:
@@ -588,7 +590,7 @@ class ChecksCommand(BaseCommand):
                 success_details.append(f"Script: loaded from {pw_script_file}")
 
             self.display_success(
-                f"Check '{name}' created successfully!\n" + "\n".join(success_details),
+                f"Check '{actual_name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Check Created"
             )
 
