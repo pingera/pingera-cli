@@ -21,6 +21,48 @@ class OnDemandChecksCommand(BaseCommand):
     
     def __init__(self, output_format: Optional[str] = None):
         super().__init__(output_format)
+    
+    def _parse_check_file(self, file_path: str) -> dict:
+        """Parse check configuration from JSON or YAML file"""
+        import json
+        import os
+        
+        if not os.path.exists(file_path):
+            self.display_error(f"Check file not found: {file_path}")
+            raise typer.Exit(1)
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            if not content:
+                self.display_error(f"Check file is empty: {file_path}")
+                raise typer.Exit(1)
+            
+            # Try to determine format from file extension or content
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            if file_ext in ['.yaml', '.yml']:
+                try:
+                    import yaml
+                    return yaml.safe_load(content)
+                except ImportError:
+                    self.display_error("YAML support not available. Install with: pip install pyyaml")
+                    raise typer.Exit(1)
+                except yaml.YAMLError as e:
+                    self.display_error(f"Invalid YAML in file {file_path}: {str(e)}")
+                    raise typer.Exit(1)
+            else:
+                # Default to JSON
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError as e:
+                    self.display_error(f"Invalid JSON in file {file_path}: {str(e)}")
+                    raise typer.Exit(1)
+                    
+        except IOError as e:
+            self.display_error(f"Failed to read check file: {str(e)}")
+            raise typer.Exit(1)
         
     def get_client(self):
         """Get Pingera SDK client with authentication for on-demand checks"""
@@ -48,7 +90,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: int = 30, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, wait_for_result: bool = False):
+    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: int = 30, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = False):
         """Execute custom on-demand check"""
         try:
             import json
@@ -58,12 +100,63 @@ class OnDemandChecksCommand(BaseCommand):
             # Import the SDK models
             from pingera.models import ExecuteCustomCheckRequest
             
-            # Build check data
-            check_data = {
-                "name": name,
-                "type": check_type,
-                "timeout": timeout
-            }
+            # If creating from file, parse file and merge with command line options
+            if from_file:
+                file_data = self._parse_check_file(from_file)
+                
+                # Command line options take precedence over file data
+                check_data = {
+                    "name": file_data.get("name", name),
+                    "type": file_data.get("type", check_type),
+                    "timeout": file_data.get("timeout", timeout)
+                }
+                
+                # Override with command line values if provided
+                if name != "On-demand check":  # Only override if name was explicitly provided
+                    check_data["name"] = name
+                if check_type != "web":  # Only override if type was explicitly provided
+                    check_data["type"] = check_type
+                if timeout != 30:  # Only override if timeout was explicitly provided
+                    check_data["timeout"] = timeout
+                
+                # Handle URL from file
+                if url is None and file_data.get("url"):
+                    url = file_data["url"]
+                elif url is not None:
+                    # Command line URL takes precedence
+                    pass
+                
+                # Handle host/port from file
+                if host is None and file_data.get("host"):
+                    host = file_data["host"]
+                elif host is not None:
+                    # Command line host takes precedence
+                    pass
+                    
+                if port is None and file_data.get("port"):
+                    port = file_data["port"]
+                elif port is not None:
+                    # Command line port takes precedence
+                    pass
+                
+                # Handle parameters from file
+                file_parameters = file_data.get("parameters")
+                if file_parameters and parameters is None:
+                    # Use file parameters if no command line parameters
+                    parameters = json.dumps(file_parameters) if isinstance(file_parameters, dict) else file_parameters
+                
+                # Handle pw_script_file from file
+                if pw_script_file is None and file_data.get("pw_script_file"):
+                    pw_script_file = file_data["pw_script_file"]
+                
+                self.display_info(f"Creating on-demand check from file: {from_file}")
+            else:
+                # Build check data normally
+                check_data = {
+                    "name": name,
+                    "type": check_type,
+                    "timeout": timeout
+                }
             
             # Add URL if provided (required for web, api, ssl checks)
             if url is not None:
@@ -606,15 +699,22 @@ def run_custom_check(
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
+    from_file: Optional[str] = typer.Option(None, "--from-file", help="Path to JSON or YAML file containing check configuration"),
     wait_for_result: bool = typer.Option(False, "--wait-for-result", help="Wait for job completion and show result immediately (max 5 minutes)"),
 ):
-    """Execute custom on-demand check. Parameters vary by check type:
+    """Execute custom on-demand check. Can be executed from command line options or from a JSON/YAML file.
+    
+    When using --from-file:
+    - Command line options override file values
+    - File should contain check configuration in JSON or YAML format
+    
+    Parameters vary by check type:
     - web/api: --url required
     - tcp: --host required, --port optional  
     - ssl: --url or --host required
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
     on_demand_cmd = OnDemandChecksCommand(get_output_format())
-    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, wait_for_result)
+    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, wait_for_result)
 
 
 @run_app.command("existing")

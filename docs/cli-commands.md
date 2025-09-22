@@ -326,6 +326,32 @@ When using `--from-file` with command line options:
 - File provides defaults for unspecified options
 - Required validations still apply
 
+### Create a new check
+```bash
+# From command line options
+pngr checks create --name "My Website" --type web --url "https://example.com"
+
+# From configuration file
+pngr checks create --from-file check-config.json
+pngr checks create --from-file check-config.yaml
+
+# Combine file and command line (command line options override file values)
+pngr checks create --from-file check-config.json --name "Override Name"
+```
+
+### Run on-demand checks
+```bash
+# From command line options
+pngr checks run custom --url https://example.com --type web --wait-for-result
+
+# From configuration file
+pngr checks run custom --from-file check-config.json --wait-for-result
+pngr checks run custom --from-file check-config.yaml --wait-for-result
+
+# Combine file and command line (command line options override file values)
+pngr checks run custom --from-file check-config.json --name "Override Name" --wait-for-result
+```
+
 ## 🔐 Secrets Management
 
 Manage organization secrets for use in monitoring checks:
@@ -523,15 +549,3 @@ pngr checks assign-group check_123 --group-id null
 
 # Export incidents as JSON
 pngr incidents list --output json > incidents.json
-
-### Create a new check
-```bash
-# From command line options
-pngr checks create --name "My Website" --type web --url "https://example.com"
-
-# From configuration file
-pngr checks create --from-file check-config.json
-pngr checks create --from-file check-config.yaml
-
-# Combine file and command line (command line options override file values)
-pngr checks create --from-file check-config.json --name "Override Name"
