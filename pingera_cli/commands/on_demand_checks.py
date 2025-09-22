@@ -215,21 +215,22 @@ class OnDemandChecksCommand(BaseCommand):
             if params_dict:
                 check_data["parameters"] = params_dict
             
-            # Validation based on check type
-            if check_type in ['web', 'api'] and not url:
-                self.display_error(f"URL is required for {check_type} checks")
+            # Validation based on check type - use the actual type from check_data
+            actual_check_type = check_data.get("type", check_type)
+            if actual_check_type in ['web', 'api'] and not url:
+                self.display_error(f"URL is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
-            if check_type in ['tcp'] and not host:
-                self.display_error(f"Host is required for {check_type} checks")
+            if actual_check_type in ['tcp'] and not host:
+                self.display_error(f"Host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
-            if check_type in ['ssl'] and not (url or host):
-                self.display_error(f"Either URL or host is required for {check_type} checks")
+            if actual_check_type in ['ssl'] and not (url or host):
+                self.display_error(f"Either URL or host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
-            if check_type in ['synthetic', 'multistep'] and not params_dict.get('pw_script'):
-                self.display_error(f"Playwright script is required for {check_type} checks. Use --pw-script-file or --parameters with pw_script")
+            if actual_check_type in ['synthetic', 'multistep'] and not params_dict.get('pw_script'):
+                self.display_error(f"Playwright script is required for {actual_check_type} checks. Use --pw-script-file or --parameters with pw_script")
                 raise typer.Exit(1)
             
             # Create the request
