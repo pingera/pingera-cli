@@ -240,8 +240,9 @@ class OnDemandChecksCommand(BaseCommand):
             response = checks_api.v1_checks_execute_post(check_request)
             job_id = response.job_id
             
-            # Build success message
-            success_details = [f"Job ID: {job_id}", f"Type: {check_type}"]
+            # Build success message - use the actual type from check_data
+            actual_check_type = check_data.get("type", check_type)
+            success_details = [f"Job ID: {job_id}", f"Type: {actual_check_type}"]
             if url:
                 success_details.append(f"URL: {url}")
             if host:
@@ -256,13 +257,15 @@ class OnDemandChecksCommand(BaseCommand):
                 self._wait_and_show_result(job_id, success_details)
             else:
                 if self.output_format in ['json', 'yaml']:
+                    actual_check_type = check_data.get("type", check_type)
+                    actual_name = check_data.get("name", name)
                     self.output_data({
                         "job_id": job_id,
-                        "check_type": check_type,
+                        "check_type": actual_check_type,
                         "url": url,
                         "host": host,
                         "port": port,
-                        "name": name,
+                        "name": actual_name,
                         "status": "queued"
                     })
                 else:
