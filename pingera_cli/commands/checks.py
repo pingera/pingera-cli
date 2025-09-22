@@ -1183,7 +1183,11 @@ from .on_demand_checks import run_app, jobs_app
 # Import check groups functionality
 from .check_groups import app as groups_app
 
-# Add the run, jobs, and groups subcommands to the main checks app
+# Import check secrets functionality
+from .check_secrets import app as check_secrets_app
+
+# Add the run, jobs, groups, and secrets subcommands to the main checks app
 app.add_typer(run_app, name="run")
 app.add_typer(jobs_app, name="jobs")
 app.add_typer(groups_app, name="groups")
+app.add_typer(check_secrets_app, name="secrets")

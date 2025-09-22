@@ -85,6 +85,26 @@ pngr checks groups update <group_id> --name "Updated Name" --description "Update
 pngr checks groups delete <group_id>
 ```
 
+### `pngr checks secrets`
+Manage secret associations for checks to inject environment variables.
+
+```bash
+# List all secrets associated with a check
+pngr checks secrets list <check_id>
+
+# Add a secret to a check with environment variable name
+pngr checks secrets add <check_id> <secret_id> DATABASE_PASSWORD
+
+# Remove a secret association from a check
+pngr checks secrets remove <check_id> <secret_id>
+
+# Remove a secret without confirmation
+pngr checks secrets remove <check_id> <secret_id> --force
+
+# Replace all secret associations for a check
+pngr checks secrets update-all <check_id> --associations '[{"secret_id": "sec123", "env_variable": "DB_PASS"}, {"secret_id": "sec456", "env_variable": "API_KEY"}]'
+```
+
 ## On-Demand Checks Commands 
 
 ### `pngr checks run`
