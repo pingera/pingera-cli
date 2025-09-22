@@ -15,6 +15,7 @@ from . import __version__
 from .commands.base import BaseCommand
 from .commands.auth import auth_cmd
 from .commands.checks import app as checks_app
+from .commands.secrets import app as secrets_app
 from .utils.console import console, error_console
 from .utils.config import get_config
 
@@ -33,6 +34,7 @@ base_cmd = BaseCommand()
 # Add subcommands
 app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(checks_app, name="checks")
+app.add_typer(secrets_app, name="secrets")
 
 
 @app.command("version")

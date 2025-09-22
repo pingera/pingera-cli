@@ -1,4 +1,3 @@
-
 # Pingera CLI Commands Specification
 
 ## Overview
@@ -70,23 +69,20 @@ pngr checks jobs get <job-id>
 Manage check groups for organizing checks.
 
 ```bash
-# List check groups
-pngr checks groups list [--page <num>] [--page-size <size>]
+# List all check groups
+pngr checks groups list
 
-# Get specific group
-pngr checks groups get <group-id>
+# Get a specific check group
+pngr checks groups get <group_id>
 
-# Create group
-pngr checks groups create --name <name> [--description <desc>] [--color <hex>] [--position <num>] [--active/--inactive]
+# Create a new check group
+pngr checks groups create "API Endpoints" --description "All API endpoint checks" --color "#4F46E5"
 
-# Update group
-pngr checks groups update <group-id> [--name <name>] [--description <desc>] [--color <hex>] [--position <num>] [--active/--inactive]
+# Update a check group
+pngr checks groups update <group_id> --name "Updated Name" --description "Updated description"
 
-# Delete group
-pngr checks groups delete <group-id> [--confirm]
-
-# Get checks in a group
-pngr checks groups checks <group-id> [--page <num>] [--page-size <size>]
+# Delete a check group
+pngr checks groups delete <group_id>
 ```
 
 ## On-Demand Checks Commands 
@@ -257,6 +253,41 @@ pngr incidents updates update <incident-id> <update-id> --body <text> [--page-id
 pngr incidents updates delete <incident-id> <update-id> [--page-id <id>] [--confirm]
 ```
 
+## Secrets Management
+
+Manage organization secrets for use in monitoring checks:
+
+```bash
+# List all secrets
+pngr secrets list
+
+# List secrets with pagination
+pngr secrets list --page 2 --page-size 50
+
+# Get a specific secret by ID
+pngr secrets get sec123abc456
+
+# Create a new secret (will prompt for value securely)
+pngr secrets create "DATABASE_PASSWORD"
+
+# Create a secret with value provided via option
+pngr secrets create "API_KEY" --value "your-secret-value"
+
+# Update a secret's value (will prompt for new value securely)
+pngr secrets update sec123abc456
+
+# Update a secret with value provided via option
+pngr secrets update sec123abc456 --value "new-secret-value"
+
+# Delete a secret (with confirmation)
+pngr secrets delete sec123abc456
+
+# Delete a secret without confirmation
+pngr secrets delete sec123abc456 --force
+```
+
+**Note:** Secret values are hidden in list views for security. Only individual secret retrieval shows the actual value (when permissions allow).
+
 ## Configuration Commands
 
 ### `pngr config`
@@ -419,4 +450,3 @@ pngr checks assign-group check_123 --group-id null
 
 # Export incidents as JSON
 pngr incidents list --output json > incidents.json
-```

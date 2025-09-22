@@ -1,4 +1,3 @@
-
 # Pingera Platform CLI 🚀
 
 A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - built with typer and rich, distributed via pip and based on Pingera SDK.
@@ -15,6 +14,7 @@ A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - bui
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 - **Easy Installation**: Simple pip install with all dependencies managed
 - **Configuration Management**: Flexible configuration with environment variables and config files
+- **Secrets Management**: Manage organization secrets for monitoring checks
 
 ## 🚀 Installation
 
@@ -90,6 +90,25 @@ pngr checks groups create \
 
 # Assign a check to a group
 pngr checks assign-group check_123 --group-id group_456
+
+# Remove a check from its group
+pngr checks assign-group check_123 --group-id null
+```
+
+### Secrets Management
+
+```bash
+# List organization secrets
+pngr secrets list
+
+# Create a new secret
+pngr secrets create "DATABASE_PASSWORD"
+
+# Update a secret's value
+pngr secrets update sec123abc456
+
+# Delete a secret
+pngr secrets delete sec123abc456
 ```
 
 ### List available regions
