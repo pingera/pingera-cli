@@ -55,7 +55,13 @@ class SecretsCommand(BaseCommand):
             secrets_api = self.get_client()
             
             # Make API call
-            secrets = secrets_api.v1_secrets_get(page=page, page_size=page_size)
+            response = secrets_api.v1_secrets_get(page=page, page_size=page_size)
+            
+            # Handle tuple response (data, response_info)
+            if isinstance(response, tuple):
+                secrets = response[0]  # First element is the data
+            else:
+                secrets = response
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
