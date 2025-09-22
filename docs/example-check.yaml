@@ -1,0 +1,21 @@
+
+name: "Example Synthetic Check"
+type: "synthetic"
+interval: 600
+timeout: 60
+parameters:
+  regions:
+    - "US"
+    - "EU"
+  pw_script: |
+    const { test, expect } = require('@playwright/test');
+    
+    test('example test', async ({ page }) => {
+      await page.goto('https://example.com');
+      await expect(page).toHaveTitle(/Example/);
+      await page.click('text=Login');
+      await page.fill('input[name="username"]', 'testuser');
+      await page.fill('input[name="password"]', 'testpass');
+      await page.click('button[type="submit"]');
+      await expect(page).toHaveURL(/dashboard/);
+    });

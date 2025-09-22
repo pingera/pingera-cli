@@ -9,7 +9,7 @@ The `pngr` CLI provides a comprehensive interface to the Pingera monitoring plat
 These options are available for all commands:
 
 ```
---api-key <key>         API key for authentication (can also use PINGERA_API_KEY env var)
+--api-key <key>         API key for authentication (can also be used PINGERA_API_KEY env var)
 --base-url <url>        API base URL (default: https://api.pingera.ru)
 --output <format>       Output format: table, json, yaml (default: table)
 --page-id <id>          Default page ID for status page operations (can also use PINGERA_PAGE_ID env var)
@@ -183,7 +183,7 @@ pngr heartbeats get <heartbeat-id>
 pngr heartbeats create --name <name> --interval <seconds> [--grace-period <seconds>]
 
 # Update heartbeat
-pngr heartbeats update <heartbeat-id> [--name <name>] [--interval <seconds>]
+pngr heartbeats update <heartbeat-id> --name <name> --interval <seconds>
 
 # Delete heartbeat
 pngr heartbeats delete <heartbeat-id> [--confirm]
@@ -211,7 +211,7 @@ pngr pages get <page-id>
 pngr pages create --name <name> [--description <desc>] [--subdomain <sub>] [--theme <theme>]
 
 # Update status page
-pngr pages update <page-id> [--name <name>] [--description <desc>] [--theme <theme>]
+pngr pages update <page-id> --name <name> --description <desc> --theme <theme>
 
 # Delete status page
 pngr pages delete <page-id> [--confirm]
@@ -231,7 +231,7 @@ pngr components get <component-id> [--page-id <id>]
 pngr components create --name <name> [--description <desc>] [--status <status>] [--page-id <id>]
 
 # Update component
-pngr components update <component-id> [--name <name>] [--description <desc>] [--page-id <id>]
+pngr components update <component-id> --name <name> --description <desc> --page-id <id>
 
 # Delete component
 pngr components delete <component-id> [--page-id <id>] [--confirm]
@@ -260,7 +260,7 @@ pngr incidents get <incident-id> [--page-id <id>]
 pngr incidents create --name <name> --body <text> --status <status> --impact <impact> [--page-id <id>]
 
 # Update incident
-pngr incidents update <incident-id> [--name <name>] [--body <text>] [--status <status>] [--page-id <id>]
+pngr incidents update <incident-id> --name <name> --body <text> --status <status> --page-id <id>
 
 # Delete incident
 pngr incidents delete <incident-id> [--page-id <id>] [--confirm]
@@ -273,7 +273,60 @@ pngr incidents updates update <incident-id> <update-id> --body <text> [--page-id
 pngr incidents updates delete <incident-id> <update-id> [--page-id <id>] [--confirm]
 ```
 
-## Secrets Management
+## 📄 Check Configuration Files
+
+You can create checks from JSON or YAML configuration files using the `--from-file` option:
+
+### JSON Format
+```json
+{
+  "name": "My API Check",
+  "type": "api",
+  "url": "https://api.example.com/health",
+  "interval": 300,
+  "timeout": 30,
+  "parameters": {
+    "regions": ["US", "EU"],
+    "http_request": {
+      "method": "POST",
+      "headers": {
+        "Authorization": "Bearer token123",
+        "Content-Type": "application/json"
+      },
+      "body": "{\"check\": \"health\"}"
+    }
+  }
+}
+```
+
+### YAML Format
+```yaml
+name: "My Synthetic Check"
+type: "synthetic"
+interval: 600
+timeout: 60
+parameters:
+  regions:
+    - "US"
+    - "EU"
+  pw_script: |
+    const { test, expect } = require('@playwright/test');
+    test('login test', async ({ page }) => {
+      await page.goto('https://example.com/login');
+      await page.fill('#username', 'testuser');
+      await page.fill('#password', 'password');
+      await page.click('button[type="submit"]');
+      await expect(page).toHaveURL(/dashboard/);
+    });
+```
+
+### Field Priority
+When using `--from-file` with command line options:
+- Command line options override file values
+- File provides defaults for unspecified options
+- Required validations still apply
+
+## 🔐 Secrets Management
 
 Manage organization secrets for use in monitoring checks:
 
@@ -400,7 +453,7 @@ pngr config set defaults.page_id your-page-id
 pngr checks list --status active
 
 # Create a web check
-pngr checks create --name "API Health" --type web --url https://api.example.com --interval 300
+pngr checks create --name "My Website" --type web --url "https://example.com"
 
 # Create a TCP check
 pngr checks create --name "Database Connection" --type tcp --host db.example.com --port 5432
@@ -470,3 +523,15 @@ pngr checks assign-group check_123 --group-id null
 
 # Export incidents as JSON
 pngr incidents list --output json > incidents.json
+
+### Create a new check
+```bash
+# From command line options
+pngr checks create --name "My Website" --type web --url "https://example.com"
+
+# From configuration file
+pngr checks create --from-file check-config.json
+pngr checks create --from-file check-config.yaml
+
+# Combine file and command line (command line options override file values)
+pngr checks create --from-file check-config.json --name "Override Name"
