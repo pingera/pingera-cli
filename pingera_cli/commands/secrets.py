@@ -57,9 +57,12 @@ class SecretsCommand(BaseCommand):
             # Make API call
             response = secrets_api.v1_secrets_get(page=page, page_size=page_size)
             
-            # Handle tuple response (data, pagination_info)
-            if isinstance(response, tuple):
-                secrets = response[0]  # First element is the secrets list
+            # Handle named tuple/object response with secrets and pagination attributes
+            if hasattr(response, 'secrets'):
+                secrets = response.secrets
+                pagination = getattr(response, 'pagination', {})
+            elif isinstance(response, (list, tuple)) and len(response) >= 2:
+                secrets = response[0]
                 pagination = response[1] if len(response) > 1 else {}
             else:
                 secrets = response
