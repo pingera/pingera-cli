@@ -7,7 +7,7 @@
     "regions": [
       "RU, Moscow"
     ],
-    "pw_script": "const { test, expect } = require('@playwright/test');\n\ntest('website screenshot test', async ({ page }) => {\n  // Navigate to the website\n  await page.goto('https://pingera.ru');\n  \n  // Wait for the page to fully load\n  await page.waitForLoadState('load');\n  \n  // Additional wait to ensure all dynamic content is loaded\n  await page.waitForTimeout(2000);\n  \n  // Take a full page screenshot\n  await page.screenshot({ \n    path: 'website-screenshot.png', \n    fullPage: true \n  });\n  \n  // Verify the page loaded successfully\n  await expect(page).toHaveTitle(/Example/);\n  \n  // Check for key elements on the page\n  await expect(page.locator('h1')).toBeVisible();\n  \n  console.log('Screenshot captured and page verified successfully');\n});"
+    "pw_script": "const { test, expect } = require('@playwright/test');\n\ntest('website screenshot test', async ({ page }) => {\n  // Navigate to the website\n  await page.goto('https://pingera.ru');\n  \n  // Wait for the page to fully load\n  await page.waitForLoadState('load');\n  \n  // Additional wait to ensure all dynamic content is loaded\n  await page.waitForTimeout(2000);\n  \n  // Take a full page screenshot\n  await page.screenshot({ \n    path: 'website-screenshot.png', \n    fullPage: true \n  });\n  \n  // Verify the page loaded successfully\n  await expect(page).toHaveTitle(/Pingera - платформа мониторинга/);\n  \n  // Check for key elements on the page\n  await expect(page.locator('h1')).toBeVisible();\n  \n  console.log('Screenshot captured and page verified successfully');\n});"
   },
   "marketplace": {
     "tags": [
