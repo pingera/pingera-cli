@@ -318,6 +318,11 @@ parameters:
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL(/dashboard/);
     });
+# Marketplace fields (ignored by CLI, used by web interface)
+marketplace:
+  tags: ["authentication", "login"]
+  description: "Tests user login functionality"
+  category: "user-flows"
 ```
 
 ### Field Priority
@@ -325,6 +330,8 @@ When using `--from-file` with command line options:
 - Command line options override file values
 - File provides defaults for unspecified options
 - Required validations still apply
+- Non-SDK fields (like `marketplace`, custom fields) are ignored and not sent to the API
+- CLI-specific fields like `pw_script_file` are processed but not sent to the SDK
 
 ### Create a new check
 ```bash

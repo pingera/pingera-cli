@@ -442,12 +442,17 @@ class ChecksCommand(BaseCommand):
             if from_file:
                 file_data = self._parse_check_file(from_file)
                 
+                # Filter only SDK-recognized fields from file data
+                # This ignores marketplace-specific fields and other extensions
+                sdk_fields = ["name", "type", "url", "host", "port", "interval", "timeout", "parameters", "active"]
+                filtered_file_data = {k: v for k, v in file_data.items() if k in sdk_fields}
+                
                 # Command line options take precedence over file data
                 check_data = {
-                    "name": file_data.get("name", name),
-                    "type": file_data.get("type", check_type),
-                    "interval": file_data.get("interval", interval),
-                    "timeout": file_data.get("timeout", timeout)
+                    "name": filtered_file_data.get("name", name),
+                    "type": filtered_file_data.get("type", check_type),
+                    "interval": filtered_file_data.get("interval", interval),
+                    "timeout": filtered_file_data.get("timeout", timeout)
                 }
                 
                 # Override with command line values if provided
@@ -461,34 +466,39 @@ class ChecksCommand(BaseCommand):
                     check_data["timeout"] = timeout
                 
                 # Handle URL from file
-                if url is None and file_data.get("url"):
-                    url = file_data["url"]
+                if url is None and filtered_file_data.get("url"):
+                    url = filtered_file_data["url"]
                 elif url is not None:
                     # Command line URL takes precedence
                     pass
                 
                 # Handle host/port from file
-                if host is None and file_data.get("host"):
-                    host = file_data["host"]
+                if host is None and filtered_file_data.get("host"):
+                    host = filtered_file_data["host"]
                 elif host is not None:
                     # Command line host takes precedence
                     pass
                     
-                if port is None and file_data.get("port"):
-                    port = file_data["port"]
+                if port is None and filtered_file_data.get("port"):
+                    port = filtered_file_data["port"]
                 elif port is not None:
                     # Command line port takes precedence
                     pass
                 
                 # Handle parameters from file
-                file_parameters = file_data.get("parameters")
+                file_parameters = filtered_file_data.get("parameters")
                 if file_parameters and parameters is None:
                     # Use file parameters if no command line parameters
                     parameters = json.dumps(file_parameters) if isinstance(file_parameters, dict) else file_parameters
                 
-                # Handle pw_script_file from file
+                # Handle pw_script_file from file (this is CLI-specific, not sent to SDK)
                 if pw_script_file is None and file_data.get("pw_script_file"):
                     pw_script_file = file_data["pw_script_file"]
+                
+                # Show info about ignored fields if any
+                ignored_fields = [k for k in file_data.keys() if k not in sdk_fields and k != "pw_script_file"]
+                if ignored_fields:
+                    self.display_info(f"Ignoring non-SDK fields from file: {', '.join(ignored_fields)}")
                 
                 self.display_info(f"Creating check from file: {from_file}")
             else:
