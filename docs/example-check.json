@@ -18,6 +18,6 @@
   "marketplace": {
     "tags": ["web", "basic"],
     "name": "Simple website check with string search",
-    "description": "Queries website URL and searches for a string in the response",
+    "description": "Queries website URL and searches for a string in the response"
   }
 }
