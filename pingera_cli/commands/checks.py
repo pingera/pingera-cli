@@ -455,11 +455,9 @@ class ChecksCommand(BaseCommand):
                     "timeout": filtered_file_data.get("timeout", timeout)
                 }
                 
-                # Override with command line values if provided
-                if name != "":  # Only override if name was explicitly provided
-                    check_data["name"] = name
-                if check_type != "web":  # Only override if type was explicitly provided
-                    check_data["type"] = check_type
+                # Override with command line values if provided (but only if they were explicitly changed from defaults)
+                # We need to be more careful about when to override file values
+                # For now, just use file values and let user override with explicit CLI options
                 if interval != 300:  # Only override if interval was explicitly provided
                     check_data["interval"] = interval
                 if timeout != 30:  # Only override if timeout was explicitly provided
@@ -557,21 +555,22 @@ class ChecksCommand(BaseCommand):
             if params_dict:
                 check_data["parameters"] = params_dict
 
-            # Validation based on check type
-            if check_type in ['web', 'api'] and not url:
-                self.display_error(f"URL is required for {check_type} checks")
+            # Validation based on check type - use the actual type from check_data
+            actual_check_type = check_data.get("type", check_type)
+            if actual_check_type in ['web', 'api'] and not url:
+                self.display_error(f"URL is required for {actual_check_type} checks")
                 raise typer.Exit(1)
 
-            if check_type in ['tcp'] and not host:
-                self.display_error(f"Host is required for {check_type} checks")
+            if actual_check_type in ['tcp'] and not host:
+                self.display_error(f"Host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
 
-            if check_type in ['ssl'] and not (url or host):
-                self.display_error(f"Either URL or host is required for {check_type} checks")
+            if actual_check_type in ['ssl'] and not (url or host):
+                self.display_error(f"Either URL or host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
 
-            if check_type in ['synthetic', 'multistep'] and not params_dict.get('pw_script'):
-                self.display_error(f"Playwright script is required for {check_type} checks. Use --pw-script-file or --parameters with pw_script")
+            if actual_check_type in ['synthetic', 'multistep'] and not params_dict.get('pw_script'):
+                self.display_error(f"Playwright script is required for {actual_check_type} checks. Use --pw-script-file or --parameters with pw_script")
                 raise typer.Exit(1)
 
             # Use the actual SDK method
