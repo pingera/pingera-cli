@@ -1167,7 +1167,7 @@ def create_check(
     timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
-    from_file: Optional[str] = typer.Option(None, "--from-file", help="Path to JSON or YAML file containing check configuration")
+    from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration")
 ):
     """Create a new monitoring check. Can be created from command line options or from a JSON/YAML file.
     

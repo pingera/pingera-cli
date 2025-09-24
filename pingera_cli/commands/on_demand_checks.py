@@ -689,7 +689,7 @@ def run_custom_check(
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
-    from_file: Optional[str] = typer.Option(None, "--from-file", help="Path to JSON or YAML file containing check configuration"),
+    from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration"),
     no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for job completion, just queue the check and return job ID"),
 ):
     """Execute custom on-demand check. Can be executed from command line options or from a JSON/YAML file.
