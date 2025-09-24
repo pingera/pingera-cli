@@ -348,15 +348,18 @@ pngr checks create --from-file check-config.json --name "Override Name"
 
 ### Run on-demand checks
 ```bash
-# From command line options
-pngr checks run custom --url https://example.com --type web --wait-for-result
+# From command line options (waits for result by default)
+pngr checks run custom --url https://example.com --type web
 
-# From configuration file
-pngr checks run custom --from-file check-config.json --wait-for-result
-pngr checks run custom --from-file check-config.yaml --wait-for-result
+# Just queue without waiting for results
+pngr checks run custom --url https://example.com --type web --no-wait
+
+# From configuration file (waits for result by default)
+pngr checks run custom --from-file check-config.json
+pngr checks run custom --from-file check-config.yaml
 
 # Combine file and command line (command line options override file values)
-pngr checks run custom --from-file check-config.json --name "Override Name" --wait-for-result
+pngr checks run custom --from-file check-config.json --name "Override Name"
 ```
 
 ## 🔐 Secrets Management

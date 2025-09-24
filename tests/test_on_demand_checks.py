@@ -259,8 +259,7 @@ class TestOnDemandChecksCommand:
                 'checks', 'run', 'custom',
                 '--url', 'https://example.com',
                 '--type', 'web',
-                '--name', 'Test Wait Check',
-                '--wait-for-result'
+                '--name', 'Test Wait Check'
             ])
         
         assert result.exit_code == 0
@@ -290,8 +289,7 @@ class TestOnDemandChecksCommand:
         
         with patch('time.sleep'):  # Speed up the test
             result = cli_runner.invoke(app, [
-                'checks', 'run', 'existing', 'check_123',
-                '--wait-for-result'
+                'checks', 'run', 'existing', 'check_123'
             ])
         
         assert result.exit_code == 0
@@ -321,8 +319,7 @@ class TestOnDemandChecksCommand:
             result = cli_runner.invoke(app, [
                 'checks', 'run', 'custom',
                 '--url', 'https://example.com',
-                '--type', 'web',
-                '--wait-for-result'
+                '--type', 'web'
             ])
         
         # The command should still succeed (exit code 0) even with timeout

@@ -90,7 +90,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: int = 30, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = False):
+    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: int = 30, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
         """Execute custom on-demand check"""
         try:
             import json
@@ -274,7 +274,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs result {job_id}' to check status.",
+                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs result {job_id}' to check status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Queued"
                     )
             
@@ -282,7 +282,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to execute custom check: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_existing_check(self, check_id: str, wait_for_result: bool = False):
+    def execute_existing_check(self, check_id: str, wait_for_result: bool = True):
         """Execute existing check on demand"""
         try:
             checks_api = self.get_client()
@@ -304,7 +304,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs result {job_id}' to check status.",
+                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs result {job_id}' to check status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Executed"
                     )
             
@@ -718,9 +718,12 @@ def run_custom_check(
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
     from_file: Optional[str] = typer.Option(None, "--from-file", help="Path to JSON or YAML file containing check configuration"),
-    wait_for_result: bool = typer.Option(False, "--wait-for-result", help="Wait for job completion and show result immediately (max 5 minutes)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for job completion, just queue the check and return job ID"),
 ):
     """Execute custom on-demand check. Can be executed from command line options or from a JSON/YAML file.
+    
+    By default, waits for job completion and shows result immediately (max 5 minutes).
+    Use --no-wait to just queue the check and return the job ID.
     
     When using --from-file:
     - Command line options override file values
@@ -732,17 +735,17 @@ def run_custom_check(
     - ssl: --url or --host required
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
     on_demand_cmd = OnDemandChecksCommand(get_output_format())
-    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, wait_for_result)
+    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, not no_wait)
 
 
 @run_app.command("existing")
 def run_existing_check(
     check_id: str = typer.Argument(..., help="Existing check ID to execute"),
-    wait_for_result: bool = typer.Option(False, "--wait-for-result", help="Wait for job completion and show result immediately (max 5 minutes)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for job completion, just queue the check and return job ID"),
 ):
-    """Execute existing check on demand"""
+    """Execute existing check on demand. By default, waits for job completion and shows result immediately (max 5 minutes). Use --no-wait to just queue the check."""
     on_demand_cmd = OnDemandChecksCommand(get_output_format())
-    on_demand_cmd.execute_existing_check(check_id, wait_for_result)
+    on_demand_cmd.execute_existing_check(check_id, not no_wait)
 
 
 @jobs_app.command("list")
