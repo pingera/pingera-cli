@@ -390,45 +390,17 @@ class ChecksCommand(BaseCommand):
             raise typer.Exit(1)
 
     def _parse_check_file(self, file_path: str) -> dict:
-        """Parse check configuration from JSON or YAML file"""
-        import json
-        import os
-        
-        if not os.path.exists(file_path):
-            self.display_error(f"Check file not found: {file_path}")
-            raise typer.Exit(1)
+        """Parse check configuration from JSON or YAML file (local or URL)"""
+        from ..utils.file_utils import load_check_file, is_url
         
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
+            if is_url(file_path):
+                self.display_info(f"Downloading check configuration from: {file_path}")
             
-            if not content:
-                self.display_error(f"Check file is empty: {file_path}")
-                raise typer.Exit(1)
+            return load_check_file(file_path)
             
-            # Try to determine format from file extension or content
-            file_ext = os.path.splitext(file_path)[1].lower()
-            
-            if file_ext in ['.yaml', '.yml']:
-                try:
-                    import yaml
-                    return yaml.safe_load(content)
-                except ImportError:
-                    self.display_error("YAML support not available. Install with: pip install pyyaml")
-                    raise typer.Exit(1)
-                except yaml.YAMLError as e:
-                    self.display_error(f"Invalid YAML in file {file_path}: {str(e)}")
-                    raise typer.Exit(1)
-            else:
-                # Default to JSON
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    self.display_error(f"Invalid JSON in file {file_path}: {str(e)}")
-                    raise typer.Exit(1)
-                    
-        except IOError as e:
-            self.display_error(f"Failed to read check file: {str(e)}")
+        except Exception as e:
+            self.display_error(str(e))
             raise typer.Exit(1)
 
     def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: int = 300, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None):
