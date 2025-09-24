@@ -150,6 +150,10 @@ class OnDemandChecksCommand(BaseCommand):
                     # Use file parameters if no command line parameters
                     parameters = json.dumps(file_parameters) if isinstance(file_parameters, dict) else file_parameters
                 
+                # Handle secrets from file
+                if filtered_file_data.get("secrets"):
+                    check_data["secrets"] = filtered_file_data["secrets"]
+                
                 # Handle pw_script_file from file (this is CLI-specific, not sent to SDK)
                 if pw_script_file is None and file_data.get("pw_script_file"):
                     pw_script_file = file_data["pw_script_file"]
