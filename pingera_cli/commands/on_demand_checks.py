@@ -106,7 +106,7 @@ class OnDemandChecksCommand(BaseCommand):
                 
                 # Filter only SDK-recognized fields from file data
                 # This ignores marketplace-specific fields and other extensions
-                sdk_fields = ["name", "type", "url", "host", "port", "timeout", "parameters"]
+                sdk_fields = ["name", "type", "url", "host", "port", "timeout", "parameters", "secrets"]
                 filtered_file_data = {k: v for k, v in file_data.items() if k in sdk_fields}
                 
                 # Command line options take precedence over file data

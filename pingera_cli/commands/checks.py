@@ -444,7 +444,7 @@ class ChecksCommand(BaseCommand):
                 
                 # Filter only SDK-recognized fields from file data
                 # This ignores marketplace-specific fields and other extensions
-                sdk_fields = ["name", "type", "url", "host", "port", "interval", "timeout", "parameters", "active"]
+                sdk_fields = ["name", "type", "url", "host", "port", "interval", "timeout", "parameters", "active", "secrets"]
                 filtered_file_data = {k: v for k, v in file_data.items() if k in sdk_fields}
                 
                 # Command line options take precedence over file data
