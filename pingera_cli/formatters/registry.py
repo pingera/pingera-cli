@@ -9,6 +9,8 @@ from .ssl_formatter import SSLFormatter
 from .synthetic_formatter import SyntheticFormatter
 from .multistep_formatter import MultistepFormatter
 from .web_formatter import WebFormatter
+from .icmp_formatter import ICMPFormatter
+from .dns_formatter import DNSFormatter
 from .generic_formatter import GenericFormatter
 
 
@@ -22,6 +24,8 @@ class FormatterRegistry:
             SyntheticFormatter(verbose),
             MultistepFormatter(verbose),
             WebFormatter(verbose),
+            ICMPFormatter(verbose),
+            DNSFormatter(verbose),
             GenericFormatter(verbose)  # Generic formatter should be last
         ]
     

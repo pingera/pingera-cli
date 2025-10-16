@@ -194,8 +194,15 @@ class ChecksCommand(BaseCommand):
                     check_url = "-"
                     if hasattr(check, 'url') and check.url:
                         check_url = str(check.url)
-                    elif hasattr(check, 'host') and hasattr(check, 'port') and check.host and check.port:
-                        check_url = f"{check.host}:{check.port}"
+                    elif hasattr(check, 'host') and check.host:
+                        # For ICMP and DNS checks, show just the host
+                        # For TCP and other checks with ports, show host:port
+                        if check_type in ["icmp", "dns"]:
+                            check_url = str(check.host)
+                        elif hasattr(check, 'port') and check.port:
+                            check_url = f"{check.host}:{check.port}"
+                        else:
+                            check_url = str(check.host)
 
                     # Handle active status
                     active_status = "✅" if hasattr(check, 'active') and check.active else "❌"
@@ -537,7 +544,7 @@ class ChecksCommand(BaseCommand):
                 self.display_error(f"URL is required for {actual_check_type} checks")
                 raise typer.Exit(1)
 
-            if actual_check_type in ['tcp'] and not host:
+            if actual_check_type in ['tcp', 'icmp', 'dns'] and not host:
                 self.display_error(f"Host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
 
@@ -1118,7 +1125,7 @@ def get_output_format():
 def list_checks(
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
     page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (max 100)"),
-    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type (web, api, ssl, tcp, synthetic, multistep)"),
+    check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type (web, api, ssl, tcp, icmp, dns, synthetic, multistep)"),
     status: Optional[str] = typer.Option(None, "--status", help="Filter by status. Multiple statuses can be separated by commas (e.g., 'ok,failed')"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Filter by name using case-insensitive partial matching (max 100 chars)"),
     group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Filter by group ID"),
@@ -1130,8 +1137,8 @@ def list_checks(
         raise typer.Exit(1)
     
     # Validate check type
-    if check_type and check_type not in ["web", "api", "ssl", "tcp", "synthetic", "multistep"]:
-        typer.echo("Error: Invalid check type. Must be one of: web, api, ssl, tcp, synthetic, multistep", err=True)
+    if check_type and check_type not in ["web", "api", "ssl", "tcp", "icmp", "dns", "synthetic", "multistep"]:
+        typer.echo("Error: Invalid check type. Must be one of: web, api, ssl, tcp, icmp, dns, synthetic, multistep", err=True)
         raise typer.Exit(1)
     
     # Validate status values if provided
@@ -1159,9 +1166,9 @@ def get_check(
 @app.command("create")
 def create_check(
     name: str = typer.Option("", "--name", "-n", help="Check name (required if not using --from-file)"),
-    check_type: str = typer.Option("web", "--type", "-t", help="Check type (web, api, tcp, ssl, synthetic, multistep)"),
+    check_type: str = typer.Option("web", "--type", "-t", help="Check type (web, api, tcp, ssl, icmp, dns, synthetic, multistep)"),
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
-    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL checks (max 255 characters)"),
+    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/ICMP/DNS checks (max 255 characters)"),
     port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
     interval: int = typer.Option(300, "--interval", "-i", help="Check interval in seconds"),
     timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
@@ -1179,6 +1186,8 @@ def create_check(
     - web/api: --url required
     - tcp: --host required, --port optional
     - ssl: --url or --host required
+    - icmp: --host required (hostname or IP to ping)
+    - dns: --host required (domain name to query)
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
     
     # Validate that we have either from_file or required parameters
