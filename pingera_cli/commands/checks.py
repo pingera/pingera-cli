@@ -87,7 +87,7 @@ class ChecksCommand(BaseCommand):
                 "page": page,
                 "page_size": page_size
             }
-            
+
             # Add optional filters
             if check_type:
                 params["type"] = check_type
@@ -150,12 +150,12 @@ class ChecksCommand(BaseCommand):
                     filters_applied.append(f"name='{name}'")
                 if group_id:
                     filters_applied.append(f"group={group_id}")
-                
+
                 if filters_applied:
                     title_parts.append(f"({', '.join(filters_applied)})")
-                
+
                 table_title = " ".join(title_parts)
-                
+
                 # Create table for default output
                 table = Table(title=table_title)
                 table.add_column("ID", style="cyan")
@@ -183,7 +183,7 @@ class ChecksCommand(BaseCommand):
                             group_display = group_name[:19] + "…"
                         else:
                             group_display = group_name
-                        
+
                         # Add color if available
                         if hasattr(check.group, 'color') and check.group.color:
                             # Use the group color for the group name display
@@ -236,16 +236,16 @@ class ChecksCommand(BaseCommand):
                     )
 
                 self.console.print(table)
-                
+
                 # Show result summary with filter info
                 summary_parts = [f"Found {len(response.checks)} checks"]
                 if page > 1:
                     summary_parts.append(f"on page {page}")
                 if filters_applied:
                     summary_parts.append(f"with filters: {', '.join(filters_applied)}")
-                
+
                 self.console.print(f"\n[dim]{' '.join(summary_parts)}[/dim]")
-                
+
                 # Show helpful hints for filtering
                 if not any([check_type, status, name, group_id]):
                     self.console.print(f"[dim]💡 Filter checks: --type <type>, --status <status>, --name <name>, --group-id <id>[/dim]")
@@ -302,7 +302,7 @@ class ChecksCommand(BaseCommand):
                     group_name = check.group.name if hasattr(check.group, 'name') else 'Unknown'
                     group_color = check.group.color if hasattr(check.group, 'color') and check.group.color else 'white'
                     group_desc = check.group.description if hasattr(check.group, 'description') and check.group.description else ''
-                    
+
                     group_info = f"• Group: [{group_color}]● {group_name}[/{group_color}]"
                     if group_desc:
                         group_info += f" [dim]({group_desc})[/dim]"
@@ -401,13 +401,13 @@ class ChecksCommand(BaseCommand):
     def _parse_check_file(self, file_path: str) -> dict:
         """Parse check configuration from JSON or YAML file (local or URL)"""
         from ..utils.file_utils import load_check_file, is_url
-        
+
         try:
             if is_url(file_path):
                 self.display_info(f"Downloading check configuration from: {file_path}")
-            
+
             return load_check_file(file_path)
-            
+
         except Exception as e:
             self.display_error(str(e))
             raise typer.Exit(1)
@@ -422,12 +422,12 @@ class ChecksCommand(BaseCommand):
             # If creating from file, parse file and merge with command line options
             if from_file:
                 file_data = self._parse_check_file(from_file)
-                
+
                 # Filter only SDK-recognized fields from file data
                 # This ignores marketplace-specific fields and other extensions
                 sdk_fields = ["name", "type", "url", "host", "port", "interval", "timeout", "parameters", "active", "secrets"]
                 filtered_file_data = {k: v for k, v in file_data.items() if k in sdk_fields}
-                
+
                 # Command line options take precedence over file data
                 check_data = {
                     "name": filtered_file_data.get("name", name),
@@ -435,7 +435,7 @@ class ChecksCommand(BaseCommand):
                     "interval": filtered_file_data.get("interval", interval),
                     "timeout": filtered_file_data.get("timeout", timeout)
                 }
-                
+
                 # Override with command line values if provided (but only if they were explicitly changed from defaults)
                 # We need to be more careful about when to override file values
                 # For now, just use file values and let user override with explicit CLI options
@@ -443,46 +443,46 @@ class ChecksCommand(BaseCommand):
                     check_data["interval"] = interval
                 if timeout != 30:  # Only override if timeout was explicitly provided
                     check_data["timeout"] = timeout
-                
+
                 # Handle URL from file
                 if url is None and filtered_file_data.get("url"):
                     url = filtered_file_data["url"]
                 elif url is not None:
                     # Command line URL takes precedence
                     pass
-                
+
                 # Handle host/port from file
                 if host is None and filtered_file_data.get("host"):
                     host = filtered_file_data["host"]
                 elif host is not None:
                     # Command line host takes precedence
                     pass
-                    
+
                 if port is None and filtered_file_data.get("port"):
                     port = filtered_file_data["port"]
                 elif port is not None:
                     # Command line port takes precedence
                     pass
-                
+
                 # Handle parameters from file
                 file_parameters = filtered_file_data.get("parameters")
                 if file_parameters and parameters is None:
                     # Use file parameters if no command line parameters
                     parameters = json.dumps(file_parameters) if isinstance(file_parameters, dict) else file_parameters
-                
+
                 # Handle secrets from file
                 if filtered_file_data.get("secrets"):
                     check_data["secrets"] = filtered_file_data["secrets"]
-                
+
                 # Handle pw_script_file from file (this is CLI-specific, not sent to SDK)
                 if pw_script_file is None and file_data.get("pw_script_file"):
                     pw_script_file = file_data["pw_script_file"]
-                
+
                 # Show info about ignored fields if any
                 ignored_fields = [k for k in file_data.keys() if k not in sdk_fields and k != "pw_script_file"]
                 if ignored_fields:
                     self.display_info(f"Ignoring non-SDK fields from file: {', '.join(ignored_fields)}")
-                
+
                 self.display_info(f"Creating check from file: {from_file}")
             else:
                 # Build check data normally
@@ -1038,7 +1038,7 @@ class ChecksCommand(BaseCommand):
                     # Extract region data using actual SDK attributes
                     region_id = str(region.id) if hasattr(region, 'id') and region.id else "-"
                     display_name = region.display_name if hasattr(region, 'display_name') and region.display_name else "-"
-                    
+
                     # Handle available check types
                     available_types = "-"
                     if hasattr(region, 'available_check_types') and region.available_check_types:
@@ -1054,7 +1054,7 @@ class ChecksCommand(BaseCommand):
                     )
 
                 self.console.print(table)
-                
+
                 # Show summary
                 filter_text = f" for {check_type} checks" if check_type else ""
                 self.console.print(f"\n[dim]Found {len(response.regions)} regions{filter_text}[/dim]")
@@ -1117,16 +1117,10 @@ class ChecksCommand(BaseCommand):
 app = typer.Typer(name="checks", help="🔍 Manage monitoring checks", no_args_is_help=True)
 
 
-def get_output_format():
-    """Get output format from config"""
-    from ..utils.config import get_config
-    return get_config().get('output_format', 'table')
-
-
 @app.command("list")
 def list_checks(
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
-    page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (max 100)"),
+    page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page"),
     check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by check type (web, api, ssl, tcp, icmp, dns, synthetic, multistep)"),
     status: Optional[str] = typer.Option(None, "--status", help="Filter by status. Multiple statuses can be separated by commas (e.g., 'ok,failed')"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Filter by name using case-insensitive partial matching (max 100 chars)"),
@@ -1137,12 +1131,12 @@ def list_checks(
     if name and len(name) > 100:
         typer.echo("Error: Name filter cannot exceed 100 characters", err=True)
         raise typer.Exit(1)
-    
+
     # Validate check type
     if check_type and check_type not in ["web", "api", "ssl", "tcp", "icmp", "dns", "synthetic", "multistep"]:
         typer.echo("Error: Invalid check type. Must be one of: web, api, ssl, tcp, icmp, dns, synthetic, multistep", err=True)
         raise typer.Exit(1)
-    
+
     # Validate status values if provided
     if status:
         valid_statuses = ["ok", "failed", "degraded", "timeout", "pending", "paused"]
@@ -1151,7 +1145,7 @@ def list_checks(
             if s not in valid_statuses:
                 typer.echo(f"Error: Invalid status '{s}'. Must be one of: {', '.join(valid_statuses)}", err=True)
                 raise typer.Exit(1)
-    
+
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.list_checks(page, page_size, check_type, status, name, group_id)
 
@@ -1179,11 +1173,11 @@ def create_check(
     from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration")
 ):
     """Create a new monitoring check. Can be created from command line options or from a JSON/YAML file.
-    
+
     When using --from-file:
     - Command line options override file values
     - File should contain check configuration in JSON or YAML format
-    
+
     Parameters vary by check type:
     - web/api: --url required
     - tcp: --host required, --port optional
@@ -1191,12 +1185,12 @@ def create_check(
     - icmp: --host required (hostname or IP to ping)
     - dns: --host required (domain name to query)
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
-    
+
     # Validate that we have either from_file or required parameters
     if not from_file and not name:
         typer.echo("Error: --name is required when not using --from-file", err=True)
         raise typer.Exit(1)
-    
+
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file)
 
@@ -1273,15 +1267,6 @@ def assign_check_to_group(
     """Assign a check to a group or remove it from a group"""
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.assign_check_to_group(check_id, group_id)
-
-
-
-
-
-
-
-
-
 
 
 # Import on-demand checks functionality from separate module
