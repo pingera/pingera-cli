@@ -246,7 +246,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs result {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
+                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs status {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Queued"
                     )
             
@@ -276,7 +276,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs result {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
+                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs status {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Executed"
                     )
             
@@ -415,6 +415,7 @@ class OnDemandChecksCommand(BaseCommand):
                 
                 # Add helpful tip about getting job details
                 self.console.print(f"\n[dim]💡 For detailed job information, use: [white]pngr checks jobs status <job_id>[/white][/dim]")
+                self.console.print(f"[dim]💡 For detailed result information, use: [white]pngr checks results --result-id <result_id>[/white][/dim]")
             
         except Exception as e:
             self.display_error(f"Failed to list jobs: {str(e)}")
@@ -516,16 +517,99 @@ class OnDemandChecksCommand(BaseCommand):
     
     def _display_multi_region_results(self, job_status, job_id: str, result_ids: list, checks_api):
         """Display aggregated multi-region results"""
-        # For now, display job status with regional summary
-        # This will be enhanced in Phase 4
-        self._display_detailed_job_status(job_status, job_id)
+        from rich.table import Table
         
-        # Add note about fetching individual regional results
-        if self.output_format not in ['json', 'yaml']:
-            self.console.print(f"\n[dim]💡 This was a multi-region execution with {len(result_ids)} regions.[/dim]")
-            if result_ids:
-                self.console.print(f"[dim]💡 To see detailed results for a specific region, use:[/dim]")
+        if self.output_format in ['json', 'yaml']:
+            # For JSON/YAML, include full job data with regional summary
+            job_data = {
+                "job_id": job_id,
+                "status": job_status.status if hasattr(job_status, 'status') else None,
+                "multi_region": True,
+                "regions_count": len(result_ids),
+                "result_ids": result_ids
+            }
+            
+            # Extract regional summary if available
+            if hasattr(job_status, 'result') and isinstance(job_status.result, dict):
+                result = job_status.result
+                if 'regional_summary' in result:
+                    job_data['regional_summary'] = result['regional_summary']
+            
+            self.output_data(job_data)
+            return
+        
+        # Display job basic info first
+        status_emoji = "✅" if hasattr(job_status, 'status') and job_status.status == 'completed' else "❌"
+        status_color = "green" if hasattr(job_status, 'status') and job_status.status == 'completed' else "red"
+        
+        self.console.print(f"\n[bold cyan]Multi-Region Execution Result[/bold cyan]")
+        self.console.print(f"• Job ID: [white]{job_id}[/white]")
+        self.console.print(f"• Status: [{status_color}]{status_emoji} {job_status.status}[/{status_color}]")
+        self.console.print(f"• Regions: [white]{len(result_ids)}[/white]")
+        
+        # Extract and display aggregated statistics
+        if hasattr(job_status, 'result') and isinstance(job_status.result, dict):
+            result = job_status.result
+            regional_summary = result.get('regional_summary', [])
+            
+            if regional_summary:
+                # Calculate aggregated statistics
+                response_times = []
+                completed_count = 0
+                failed_count = 0
+                
+                for region_result in regional_summary:
+                    if region_result.get('status') == 'ok':
+                        completed_count += 1
+                    else:
+                        failed_count += 1
+                    
+                    if 'response_time' in region_result and region_result['response_time']:
+                        response_times.append(region_result['response_time'])
+                
+                # Display aggregated stats
+                self.console.print(f"\n[bold cyan]Aggregated Statistics:[/bold cyan]")
+                self.console.print(f"• Completed: [green]{completed_count}[/green] / Failed: [red]{failed_count}[/red]")
+                
+                if response_times:
+                    avg_response = sum(response_times) / len(response_times)
+                    min_response = min(response_times)
+                    max_response = max(response_times)
+                    self.console.print(f"• Response Time: [yellow]Avg: {avg_response:.0f}ms[/yellow], [green]Min: {min_response}ms[/green], [red]Max: {max_response}ms[/red]")
+                
+                # Create regional results table
+                table = Table(title="Regional Results")
+                table.add_column("Region", style="cyan")
+                table.add_column("Status", style="magenta")
+                table.add_column("Response Time", style="yellow")
+                table.add_column("Result ID", style="dim")
+                
+                for region_result in regional_summary:
+                    region = region_result.get('region', 'Unknown')
+                    status = region_result.get('status', 'unknown')
+                    response_time = region_result.get('response_time')
+                    result_id = region_result.get('result_id', 'N/A')
+                    
+                    # Format status with color
+                    status_color = "green" if status == 'ok' else "red"
+                    status_display = f"[{status_color}]{status}[/{status_color}]"
+                    
+                    # Format response time
+                    response_display = f"{response_time}ms" if response_time else "N/A"
+                    
+                    table.add_row(region, status_display, response_display, result_id)
+                
+                self.console.print(f"\n{table}")
+                
+                # Add guidance for detailed results
+                self.console.print(f"\n[dim]💡 To see detailed results for a specific region, use:[/dim]")
                 self.console.print(f"[dim]   pngr checks results --result-id <result_id>[/dim]")
+            else:
+                # Fallback if no regional_summary
+                self._display_detailed_job_status(job_status, job_id)
+        else:
+            # Fallback to basic job status
+            self._display_detailed_job_status(job_status, job_id)
     
     def _display_detailed_result_with_job_info(self, job_status, job_id: str, detailed_result):
         """Display detailed result information combined with job info"""
@@ -742,7 +826,7 @@ class OnDemandChecksCommand(BaseCommand):
                         })
                     else:
                         self.display_error(f"Error polling job status: {str(e)}")
-                        self.display_info(f"You can manually check status with: pngr checks jobs result {job_id}")
+                        self.display_info(f"You can manually check status with: pngr checks jobs status {job_id}")
                     return
             
             # Timeout reached
@@ -756,7 +840,7 @@ class OnDemandChecksCommand(BaseCommand):
             else:
                 self.display_warning(
                     f"Job did not complete within {max_wait_time} seconds.\n"
-                    f"The job may still be running. Use 'pngr checks jobs result {job_id}' to check status manually."
+                    f"The job may still be running. Use 'pngr checks jobs status {job_id}' to check status manually."
                 )
 
 
@@ -822,10 +906,10 @@ def list_jobs(
     on_demand_cmd.list_jobs(page, page_size)
 
 
-@jobs_app.command("result")
-def get_job_result(
-    job_id: str = typer.Argument(..., help="Job ID to get result for"),
+@jobs_app.command("status")
+def get_job_status(
+    job_id: str = typer.Argument(..., help="Job ID to get status for"),
 ):
-    """Get job result"""
+    """Get job status and results. For multi-region executions, shows aggregated statistics and regional summary."""
     on_demand_cmd = OnDemandChecksCommand(get_output_format())
     on_demand_cmd.get_job_status(job_id)
