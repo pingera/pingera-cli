@@ -224,8 +224,10 @@ API Key: ✗ Not set
             from pingera.exceptions import UnauthorizedException
 
             # Configure the client (same pattern as checks command)
+            from ..utils.config import get_config
+            
             configuration = Configuration()
-            configuration.host = "https://api.pingera.ru"
+            configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
             configuration.api_key['apiKeyAuth'] = api_key
 
             # Create API client

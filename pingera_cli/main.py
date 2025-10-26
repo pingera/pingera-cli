@@ -108,11 +108,12 @@ def config(
     show: bool = typer.Option(False, "--show", "-s", help="Show current configuration"),
     set_api_key: Optional[str] = typer.Option(None, "--api-key", help="Set Pingera API key"),
     set_output_format: Optional[str] = typer.Option(None, "--output-format", help="Set output format (table, json, yaml)"),
+    set_base_url: Optional[str] = typer.Option(None, "--base-url", help="Set Pingera API base URL"),
 ):
     """
     Manage pngr configuration
     """
-    from .utils.config import set_output_format as save_output_format
+    from .utils.config import set_output_format as save_output_format, get_config, save_config
     
     if set_api_key:
         # In a real implementation, this would save to a config file
@@ -128,6 +129,15 @@ def config(
                 console.print(f"[red]✗[/red] Failed to save output format")
         else:
             console.print(f"[red]✗[/red] Invalid output format. Use: table, json, or yaml")
+        return
+
+    if set_base_url:
+        config_data = get_config()
+        config_data['base_url'] = set_base_url
+        if save_config(config_data):
+            console.print(f"[green]✓[/green] Base URL set to: {set_base_url}")
+        else:
+            console.print(f"[red]✗[/red] Failed to save base URL")
         return
 
     if show:

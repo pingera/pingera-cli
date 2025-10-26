@@ -44,7 +44,7 @@ def get_config() -> Dict[str, Any]:
         Dict[str, Any]: Configuration dictionary
     """
     default_config = {
-        'base_url': 'https://6a15b292-e06a-4a32-9515-850bafbd3574-00-215xgzvj3wi0t.janeway.replit.dev',
+        'base_url': 'https://api.pingera.ru',
         'output_format': 'table',
         'verbose': False,
         'color': True,

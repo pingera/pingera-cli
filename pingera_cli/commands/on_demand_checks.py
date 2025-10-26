@@ -46,10 +46,11 @@ class OnDemandChecksCommand(BaseCommand):
         try:
             from pingera import ApiClient, Configuration
             from pingera.api import OnDemandChecksApi
+            from ..utils.config import get_config
             
             # Configure the client
             configuration = Configuration()
-            configuration.host = "https://api.pingera.ru"
+            configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
             configuration.api_key['apiKeyAuth'] = api_key
             
             # Create API client
@@ -487,9 +488,10 @@ class OnDemandChecksCommand(BaseCommand):
             
             from pingera import ApiClient, Configuration
             from pingera.api import ChecksApi
+            from ..utils.config import get_config
             
             configuration = Configuration()
-            configuration.host = "https://api.pingera.ru"
+            configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
             configuration.api_key['apiKeyAuth'] = api_key
             api_client = ApiClient(configuration)
             checks_api = ChecksApi(api_client)
