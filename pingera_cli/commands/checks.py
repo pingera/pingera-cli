@@ -1127,6 +1127,8 @@ def list_checks(
     group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Filter by group ID"),
 ):
     """List monitoring checks with advanced filtering options"""
+    from ..utils.config import get_output_format
+    
     # Validate name length
     if name and len(name) > 100:
         typer.echo("Error: Name filter cannot exceed 100 characters", err=True)
@@ -1155,6 +1157,7 @@ def get_check(
     check_id: str = typer.Argument(..., help="Check ID to retrieve"),
 ):
     """Get specific check details"""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.get_check(check_id)
 
@@ -1185,6 +1188,7 @@ def create_check(
     - icmp: --host required (hostname or IP to ping)
     - dns: --host required (domain name to query)
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
+    from ..utils.config import get_output_format
 
     # Validate that we have either from_file or required parameters
     if not from_file and not name:
@@ -1209,6 +1213,7 @@ def update_check(
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks")
 ):
     """Update an existing check. Use --parameters to provide complex parameters like Playwright scripts, regions, etc."""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file)
 
@@ -1219,6 +1224,7 @@ def delete_check(
     confirm: bool = typer.Option(False, "--confirm", help="Skip confirmation prompt"),
 ):
     """Delete a monitoring check"""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.delete_check(check_id, confirm)
 
@@ -1235,6 +1241,7 @@ def get_results(
     region: Optional[str] = typer.Option(None, "--region", help="Filter by region"),
 ):
     """Get check results with advanced filtering. If no check_id is provided, returns unified results across all checks."""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.get_check_results(check_id, from_date, to_date, page, page_size, status, check_type, region)
 
@@ -1246,6 +1253,7 @@ def get_result(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full detailed information including network requests"),
 ):
     """Get detailed information for a specific check result"""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.get_check_result_detailed(check_id, result_id, verbose)
 
@@ -1255,6 +1263,7 @@ def list_regions(
     check_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter regions by check type (web, api, tcp, ssl, synthetic, multistep)"),
 ):
     """List available regions for monitoring checks"""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.list_regions(check_type)
 
@@ -1265,6 +1274,7 @@ def assign_check_to_group(
     group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Group ID to assign check to (use 'null' to remove from group)"),
 ):
     """Assign a check to a group or remove it from a group"""
+    from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.assign_check_to_group(check_id, group_id)
 
