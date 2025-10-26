@@ -601,7 +601,8 @@ class OnDemandChecksCommand(BaseCommand):
                     
                     table.add_row(region, status_display, response_display, result_id)
                 
-                self.console.print(f"\n{table}")
+                self.console.print("\n")
+                self.console.print(table)
                 
                 # Add guidance for detailed results
                 self.console.print(f"\n[dim]💡 To see detailed results for a specific region, use:[/dim]")
