@@ -705,7 +705,7 @@ class ChecksCommand(BaseCommand):
             self.display_error(f"Failed to delete check: {str(e)}")
             raise typer.Exit(1)
 
-    def get_check_results(self, check_id: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None, page: int = 1, page_size: int = 20, status: Optional[str] = None, check_type: Optional[str] = None, region: Optional[str] = None):
+    def get_check_results(self, check_id: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None, page: int = 1, page_size: int = 20, status: Optional[str] = None, check_type: Optional[str] = None, region: Optional[str] = None, result_id: Optional[str] = None):
         """Get check results using unified results API"""
         try:
             unified_api = self.get_unified_results_client()
@@ -719,6 +719,10 @@ class ChecksCommand(BaseCommand):
             # Add check_id only if provided
             if check_id:
                 params["check_id"] = check_id
+
+            # Add result_id if provided (for fetching specific result)
+            if result_id:
+                params["result_id"] = result_id
 
             # Add optional filters
             if from_date:
@@ -1239,11 +1243,12 @@ def get_results(
     status: Optional[str] = typer.Option(None, "--status", help="Filter by status (ok, failed, degraded, timeout, pending)"),
     check_type: Optional[str] = typer.Option(None, "--type", help="Filter by check type (web, api, tcp, ssl, synthetic, multistep)"),
     region: Optional[str] = typer.Option(None, "--region", help="Filter by region"),
+    result_id: Optional[str] = typer.Option(None, "--result-id", "-r", help="Filter by specific result ID"),
 ):
-    """Get check results with advanced filtering. If no check_id is provided, returns unified results across all checks."""
+    """Get check results with advanced filtering. If no check_id is provided, returns unified results across all checks. Use --result-id to fetch a specific result."""
     from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.get_check_results(check_id, from_date, to_date, page, page_size, status, check_type, region)
+    checks_cmd.get_check_results(check_id, from_date, to_date, page, page_size, status, check_type, region, result_id)
 
 
 @app.command("result")
