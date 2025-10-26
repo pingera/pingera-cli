@@ -246,7 +246,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs result {job_id}' to check status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
+                        f"On-demand check queued successfully!\n" + "\n".join(success_details) + f"\n\nUse 'pngr checks jobs result {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Queued"
                     )
             
@@ -276,7 +276,7 @@ class OnDemandChecksCommand(BaseCommand):
                     })
                 else:
                     self.display_success(
-                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs result {job_id}' to check status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
+                        f"Existing check executed successfully!\nJob ID: {job_id}\nCheck ID: {check_id}\n\nUse 'pngr checks jobs result {job_id}' to check job status.\n\n💡 Tip: Remove --no-wait to see results immediately.",
                         "✅ Check Executed"
                     )
             
@@ -451,6 +451,98 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to get job status: {str(e)}")
             raise typer.Exit(1)
 
+    def _fetch_and_display_job_result(self, job_id: str, job_status):
+        """Fetch detailed results from the new results endpoint and display them"""
+        try:
+            # Extract result_id(s) from job response
+            result_ids = []
+            is_multi_region = False
+            
+            if hasattr(job_status, 'result') and job_status.result:
+                result = job_status.result
+                
+                # Check if this is a multi-region result
+                if isinstance(result, dict):
+                    if 'regional_summary' in result and result['regional_summary']:
+                        # Multi-region execution
+                        is_multi_region = True
+                        for regional_result in result['regional_summary']:
+                            if 'result_id' in regional_result:
+                                result_ids.append(regional_result['result_id'])
+                    elif 'result_id' in result:
+                        # Single-region execution
+                        result_ids.append(result['result_id'])
+            
+            if not result_ids:
+                # No result IDs found, display job status only
+                self._display_detailed_job_status(job_status, job_id)
+                return
+            
+            # Get client for fetching results
+            api_key = get_api_key()
+            if not api_key:
+                self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+                raise typer.Exit(1)
+            
+            from pingera import ApiClient, Configuration
+            from pingera.api import ChecksApi
+            
+            configuration = Configuration()
+            configuration.host = "https://api.pingera.ru"
+            configuration.api_key['apiKeyAuth'] = api_key
+            api_client = ApiClient(configuration)
+            checks_api = ChecksApi(api_client)
+            
+            # Fetch detailed results for each result_id
+            if is_multi_region:
+                # For multi-region, show aggregated view
+                self._display_multi_region_results(job_status, job_id, result_ids, checks_api)
+            else:
+                # For single-region, fetch and display the single result
+                result_id = result_ids[0]
+                response = checks_api.v1_checks_all_results_get(result_id=result_id)
+                
+                if hasattr(response, 'results') and response.results and len(response.results) > 0:
+                    detailed_result = response.results[0]
+                    self._display_detailed_result_with_job_info(job_status, job_id, detailed_result)
+                else:
+                    # Fallback to job status display
+                    self._display_detailed_job_status(job_status, job_id)
+                    
+        except Exception as e:
+            # Fallback to job status display on error
+            self.display_warning(f"Could not fetch detailed results: {str(e)}")
+            self._display_detailed_job_status(job_status, job_id)
+    
+    def _display_multi_region_results(self, job_status, job_id: str, result_ids: list, checks_api):
+        """Display aggregated multi-region results"""
+        # For now, display job status with regional summary
+        # This will be enhanced in Phase 4
+        self._display_detailed_job_status(job_status, job_id)
+        
+        # Add note about fetching individual regional results
+        if self.output_format not in ['json', 'yaml']:
+            self.console.print(f"\n[dim]💡 This was a multi-region execution with {len(result_ids)} regions.[/dim]")
+            if result_ids:
+                self.console.print(f"[dim]💡 To see detailed results for a specific region, use:[/dim]")
+                self.console.print(f"[dim]   pngr checks results --result-id <result_id>[/dim]")
+    
+    def _display_detailed_result_with_job_info(self, job_status, job_id: str, detailed_result):
+        """Display detailed result information combined with job info"""
+        # Use the existing detailed result display logic from checks.py
+        # For now, use the job status display and note about detailed results
+        self._display_detailed_job_status(job_status, job_id)
+        
+        # Additional result details if available
+        if hasattr(detailed_result, 'check_metadata') and detailed_result.check_metadata:
+            from ..formatters.registry import FormatterRegistry
+            registry = FormatterRegistry(verbose=False)
+            metadata_formatted = registry.format_metadata(detailed_result.check_metadata)
+            
+            if metadata_formatted.strip():
+                self.console.print(f"\n[bold cyan]Detailed Result Metadata:[/bold cyan]")
+                self.console.print(metadata_formatted)
+    
     def _display_detailed_job_status(self, job_status, job_id: str):
         """Display detailed job status information in a rich format"""
         
@@ -621,13 +713,13 @@ class OnDemandChecksCommand(BaseCommand):
                     
                     if hasattr(job_status, 'status'):
                         if job_status.status in ['completed', 'failed', 'error']:
-                            # Job is finished, show the result
+                            # Job is finished, fetch and show the result
                             if self.output_format not in ['json', 'yaml']:
                                 progress.update(task, description=f"✅ Job {job_status.status}!")
                                 time.sleep(0.5)  # Brief pause to show completion
                             
-                            # Display the result using existing method
-                            self.get_job_status(job_id)
+                            # Fetch and display the actual result
+                            self._fetch_and_display_job_result(job_id, job_status)
                             return
                         
                         elif job_status.status == 'running':
