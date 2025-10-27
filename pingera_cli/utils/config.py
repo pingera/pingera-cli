@@ -158,6 +158,32 @@ def get_output_format() -> str:
     return config.get('output_format', 'table')
 
 
+def set_verbose_mode(verbose: bool) -> bool:
+    """
+    Set verbose mode in configuration file
+
+    Args:
+        verbose: Verbose mode flag
+
+    Returns:
+        bool: True if saved successfully, False otherwise
+    """
+    config = get_config()
+    config['verbose'] = verbose
+    return save_config(config)
+
+
+def get_verbose_mode() -> bool:
+    """
+    Get verbose mode from configuration
+
+    Returns:
+        bool: Verbose mode flag (default: False)
+    """
+    config = get_config()
+    return config.get('verbose', False)
+
+
 def validate_config() -> Dict[str, bool]:
     """
     Validate current configuration

@@ -907,8 +907,8 @@ def get_output_format():
 
 def get_verbose_mode():
     """Get verbose mode from config"""
-    from ..utils.config import get_config
-    return get_config().get('verbose', False)
+    from ..utils.config import get_verbose_mode as _get_verbose_mode
+    return _get_verbose_mode()
 
 
 @run_app.command("custom")

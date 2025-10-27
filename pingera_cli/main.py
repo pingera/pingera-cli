@@ -196,9 +196,10 @@ def main(
     if verbose:
         console.print("[dim]Verbose mode enabled[/dim]")
     
-    # Store current output format in config temporarily for subcommands
-    from .utils.config import set_output_format as save_output_format
+    # Store current output format and verbose mode in config temporarily for subcommands
+    from .utils.config import set_output_format as save_output_format, set_verbose_mode
     save_output_format(output)
+    set_verbose_mode(verbose)
 
 
 def cli_entry_point():
