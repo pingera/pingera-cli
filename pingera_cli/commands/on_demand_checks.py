@@ -455,6 +455,8 @@ class OnDemandChecksCommand(BaseCommand):
 
     def _fetch_and_display_job_result(self, job_id: str, job_status):
         """Fetch detailed results from the new results endpoint and display them"""
+        import time
+        
         try:
             # Extract result_id(s) from job response
             result_ids = []
@@ -463,14 +465,56 @@ class OnDemandChecksCommand(BaseCommand):
             if hasattr(job_status, 'result') and job_status.result:
                 result = job_status.result
                 
+                # Debug: Print the raw result to see what we're getting
+                if self.output_format not in ['json', 'yaml']:
+                    import json
+                    self.console.print(f"[dim]DEBUG: Raw result from job status:[/dim]")
+                    self.console.print(f"[dim]{json.dumps(result, indent=2, default=str)}[/dim]")
+                
                 # Check if this is a multi-region result
                 if isinstance(result, dict):
                     if 'regional_summary' in result and result['regional_summary']:
                         # Multi-region execution
                         is_multi_region = True
-                        for regional_result in result['regional_summary']:
+                        regional_summary = result['regional_summary']
+                        
+                        # Debug: Show what we found
+                        if self.output_format not in ['json', 'yaml']:
+                            self.console.print(f"[dim]DEBUG: Found {len(regional_summary)} regions in regional_summary[/dim]")
+                        
+                        for regional_result in regional_summary:
                             if 'result_id' in regional_result:
                                 result_ids.append(regional_result['result_id'])
+                        
+                        # Check if we might be missing results (race condition detection)
+                        total_regions = result.get('total_regions', len(regional_summary))
+                        completed_regions = result.get('completed_regions', len(regional_summary))
+                        
+                        if self.output_format not in ['json', 'yaml']:
+                            self.console.print(f"[dim]DEBUG: total_regions={total_regions}, completed_regions={completed_regions}, found result_ids={len(result_ids)}[/dim]")
+                        
+                        # If we're missing results, wait a bit and refetch
+                        if len(result_ids) < total_regions:
+                            if self.output_format not in ['json', 'yaml']:
+                                self.console.print(f"[yellow]⚠ Race condition detected: {len(result_ids)}/{total_regions} results ready. Waiting 2s and retrying...[/yellow]")
+                            time.sleep(2)
+                            
+                            # Refetch job status
+                            checks_api = self.get_client()
+                            job_status = checks_api.v1_checks_jobs_job_id_get(job_id=job_id)
+                            
+                            # Re-extract result_ids
+                            result_ids = []
+                            if hasattr(job_status, 'result') and job_status.result:
+                                result = job_status.result
+                                if isinstance(result, dict) and 'regional_summary' in result:
+                                    for regional_result in result['regional_summary']:
+                                        if 'result_id' in regional_result:
+                                            result_ids.append(regional_result['result_id'])
+                                    
+                                    if self.output_format not in ['json', 'yaml']:
+                                        self.console.print(f"[dim]DEBUG: After retry, found {len(result_ids)} result_ids[/dim]")
+                    
                     elif 'result_id' in result:
                         # Single-region execution
                         result_ids.append(result['result_id'])
