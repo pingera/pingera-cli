@@ -173,7 +173,7 @@ def config(
 
 @app.callback()
 def main(
-    version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
+    version: bool = typer.Option(False, "--version", "-V", help="Show version and exit", is_eager=True),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     output: str = typer.Option("table", "--output", "-o", help="Output format: table, json, yaml"),
 ):
