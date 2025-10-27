@@ -487,14 +487,14 @@ class OnDemandChecksCommand(BaseCommand):
                 raise typer.Exit(1)
             
             from pingera import ApiClient, Configuration
-            from pingera.api import ChecksApi
+            from pingera.api import ChecksUnifiedResultsApi
             from ..utils.config import get_config
             
             configuration = Configuration()
             configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
             configuration.api_key['apiKeyAuth'] = api_key
             api_client = ApiClient(configuration)
-            checks_api = ChecksApi(api_client)
+            checks_api = ChecksUnifiedResultsApi(api_client)
             
             # Fetch detailed results for each result_id
             if is_multi_region:
