@@ -746,6 +746,36 @@ class ChecksCommand(BaseCommand):
                     self.display_info("No results found.")
                 return
 
+            # If result_id was specified, we're fetching a single result - display it with full formatting
+            if result_id and len(response.results) == 1:
+                result = response.results[0]
+                
+                if self.output_format in ['json', 'yaml']:
+                    result_dict = {
+                        "id": str(result.id) if hasattr(result, 'id') and result.id else None,
+                        "check_id": result.check_id if hasattr(result, 'check_id') else None,
+                        "check_name": result.check_name if hasattr(result, 'check_name') else None,
+                        "check_type": result.check_type if hasattr(result, 'check_type') else None,
+                        "status": result.status if hasattr(result, 'status') else None,
+                        "created_at": result.created_at if hasattr(result, 'created_at') and result.created_at else None,
+                        "response_time": result.response_time if hasattr(result, 'response_time') else None,
+                        "error_message": result.error_message if hasattr(result, 'error_message') else None,
+                        "check_server_id": result.check_server_id if hasattr(result, 'check_server_id') else None,
+                        "region": result.region if hasattr(result, 'region') else None,
+                        "result_type": result.result_type if hasattr(result, 'result_type') else None,
+                        "check_metadata": result.check_metadata if hasattr(result, 'check_metadata') else None,
+                        "check_server": {
+                            "ip_address": result.check_server.ip_address if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'ip_address') else None,
+                            "country": result.check_server.country if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'country') else None,
+                            "region": result.check_server.region if hasattr(result, 'check_server') and result.check_server and hasattr(result.check_server, 'region') else None
+                        } if hasattr(result, 'check_server') and result.check_server else None
+                    }
+                    self.output_data(result_dict)
+                else:
+                    # Display with full formatting using _display_detailed_result
+                    self._display_detailed_result(result, verbose=True)
+                return
+
             # Prepare data for different output formats
             if self.output_format in ['json', 'yaml']:
                 results_data = []
@@ -874,8 +904,7 @@ class ChecksCommand(BaseCommand):
                 if check_id:
                     hints.append(f"Use 'pngr checks result {check_id} <result-id>' for detailed result info")
                 else:
-                    hints.append("Use 'pngr checks result <check-id> <result-id>' for detailed result info")
-                    hints.append("For on-demand checks: use 'pngr checks jobs result <result-id>' for detailed info")
+                    hints.append("Use 'pngr checks results --result-id <result-id>' for detailed result info")
                     hints.append("Use 'pngr checks list' to see all available checks and their IDs")
                     hints.append("Filter results: --type <type>, --status <status>, --region <region>")
 
