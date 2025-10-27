@@ -161,7 +161,7 @@ class ExecutionGroupsCommand(BaseCommand):
         """Get specific execution group details"""
         try:
             groups_api = self.get_client()
-            group = groups_api.v1_checks_execution_groups_execution_group_id_get(execution_group_id=group_id)
+            group = groups_api.v1_execution_groups_group_id_get(group_id=group_id)
 
             if self.output_format in ['json', 'yaml']:
                 group_data = {
@@ -247,11 +247,7 @@ class ExecutionGroupsCommand(BaseCommand):
         try:
             groups_api = self.get_client()
 
-            response = groups_api.v1_checks_execution_groups_execution_group_id_regional_results_get(
-                execution_group_id=group_id,
-                page=page,
-                page_size=page_size
-            )
+            response = groups_api.v1_execution_groups_group_id_regional_results_get(group_id=group_id)
 
             if not hasattr(response, 'regional_results') or not response.regional_results:
                 if self.output_format in ['json', 'yaml']:
