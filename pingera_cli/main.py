@@ -171,9 +171,10 @@ def config(
 
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
-    version: bool = typer.Option(False, "--version", "-V", help="Show version and exit", is_eager=True),
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     output: str = typer.Option("table", "--output", "-o", help="Output format: table, json, yaml"),
 ):
@@ -191,6 +192,11 @@ def main(
     """
     if version:
         console.print(f"[bold blue]PingeraCLI[/bold blue] v{__version__}")
+        raise typer.Exit()
+
+    # If no command is provided and no version flag, show help
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
         raise typer.Exit()
 
     if verbose:
