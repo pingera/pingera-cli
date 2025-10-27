@@ -663,19 +663,63 @@ class OnDemandChecksCommand(BaseCommand):
     
     def _display_detailed_result_with_job_info(self, job_status, job_id: str, detailed_result):
         """Display detailed result information combined with job info"""
-        # Use the existing detailed result display logic from checks.py
-        # For now, use the job status display and note about detailed results
-        self._display_detailed_job_status(job_status, job_id)
+        from rich.panel import Panel
+        from ..formatters.registry import FormatterRegistry
         
-        # Additional result details if available
+        # Determine status color and emoji
+        status_emoji = "✅" if hasattr(detailed_result, 'status') and detailed_result.status == 'ok' else "❌"
+        status_color = "green" if hasattr(detailed_result, 'status') and detailed_result.status == 'ok' else "red"
+        
+        # Basic information
+        basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
+• Result ID: [white]{detailed_result.id if hasattr(detailed_result, 'id') else 'Unknown'}[/white]
+• Check ID: [white]{detailed_result.check_id if hasattr(detailed_result, 'check_id') and detailed_result.check_id else 'None'}[/white]
+• Status: [{status_color}]{status_emoji} {detailed_result.status if hasattr(detailed_result, 'status') else 'Unknown'}[/{status_color}]
+• Timestamp: [white]{detailed_result.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if hasattr(detailed_result, 'created_at') and detailed_result.created_at else 'Unknown'}[/white]"""
+        
+        if hasattr(detailed_result, 'response_time') and detailed_result.response_time:
+            basic_info += f"\n• Response Time: [yellow]{detailed_result.response_time}ms[/yellow]"
+        
+        # Server information
+        if hasattr(detailed_result, 'check_server') and detailed_result.check_server:
+            server = detailed_result.check_server
+            server_info = f"""• Check Server: [white]{server.id if hasattr(server, 'id') else 'Unknown'}[/white]
+• Server IP: [white]{server.ip_address if hasattr(server, 'ip_address') else 'Unknown'}[/white]
+• Server Country: [white]{server.country if hasattr(server, 'country') else 'Unknown'}[/white]
+• Server Region: [white]{server.region if hasattr(server, 'region') else 'Unknown'}[/white]"""
+            basic_info += f"\n{server_info}"
+        
+        # Error information
+        error_info = ""
+        if hasattr(detailed_result, 'error_message') and detailed_result.error_message:
+            error_info = f"""
+[bold red]Error Information:[/bold red]
+• Error: [red]{detailed_result.error_message}[/red]"""
+        
+        # Metadata analysis using formatters
+        metadata_info = ""
         if hasattr(detailed_result, 'check_metadata') and detailed_result.check_metadata:
-            from ..formatters.registry import FormatterRegistry
-            registry = FormatterRegistry(verbose=False)
-            metadata_formatted = registry.format_metadata(detailed_result.check_metadata)
+            metadata = detailed_result.check_metadata
             
-            if metadata_formatted.strip():
-                self.console.print(f"\n[bold cyan]Detailed Result Metadata:[/bold cyan]")
-                self.console.print(metadata_formatted)
+            if isinstance(metadata, dict):
+                registry = FormatterRegistry(verbose=self.verbose)
+                metadata_info = registry.format_metadata(metadata)
+        
+        # Combine all sections
+        full_info = basic_info
+        if error_info:
+            full_info += error_info
+        if metadata_info:
+            full_info += metadata_info
+        
+        panel = Panel(
+            full_info,
+            title=f"🔍 Result Details: {detailed_result.id if hasattr(detailed_result, 'id') else 'Unknown'}",
+            border_style="blue",
+            padding=(1, 2),
+        )
+        
+        self.console.print(panel)
     
     def _display_detailed_job_status(self, job_status, job_id: str):
         """Display detailed job status information in a rich format"""
