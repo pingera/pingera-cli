@@ -19,8 +19,9 @@ class OnDemandChecksCommand(BaseCommand):
     Commands for managing on-demand monitoring checks
     """
     
-    def __init__(self, output_format: Optional[str] = None):
+    def __init__(self, output_format: Optional[str] = None, verbose: bool = False):
         super().__init__(output_format)
+        self.verbose = verbose
     
     def _parse_check_file(self, file_path: str) -> dict:
         """Parse check configuration from JSON or YAML file (local or URL)"""
@@ -446,14 +447,14 @@ class OnDemandChecksCommand(BaseCommand):
                 }
                 self.output_data(job_data)
             else:
-                # Rich formatted detailed view
-                self._display_detailed_job_status(job_status, job_id)
+                # Rich formatted detailed view - fetch and display with results
+                self._fetch_and_display_job_result(job_id, job_status, verbose=self.verbose)
             
         except Exception as e:
             self.display_error(f"Failed to get job status: {str(e)}")
             raise typer.Exit(1)
 
-    def _fetch_and_display_job_result(self, job_id: str, job_status):
+    def _fetch_and_display_job_result(self, job_id: str, job_status, verbose: bool = False):
         """Fetch detailed results from the new results endpoint and display them"""
         import time
         
@@ -465,8 +466,8 @@ class OnDemandChecksCommand(BaseCommand):
             if hasattr(job_status, 'result') and job_status.result:
                 result = job_status.result
                 
-                # Debug: Print the raw result to see what we're getting
-                if self.output_format not in ['json', 'yaml']:
+                # Debug: Print the raw result to see what we're getting (only in verbose mode)
+                if verbose and self.output_format not in ['json', 'yaml']:
                     import json
                     self.console.print(f"[dim]DEBUG: Raw result from job status:[/dim]")
                     self.console.print(f"[dim]{json.dumps(result, indent=2, default=str)}[/dim]")
@@ -478,8 +479,8 @@ class OnDemandChecksCommand(BaseCommand):
                         is_multi_region = True
                         regional_summary = result['regional_summary']
                         
-                        # Debug: Show what we found
-                        if self.output_format not in ['json', 'yaml']:
+                        # Debug: Show what we found (only in verbose mode)
+                        if verbose and self.output_format not in ['json', 'yaml']:
                             self.console.print(f"[dim]DEBUG: Found {len(regional_summary)} regions in regional_summary[/dim]")
                         
                         for regional_result in regional_summary:
@@ -490,7 +491,7 @@ class OnDemandChecksCommand(BaseCommand):
                         total_regions = result.get('total_regions', len(regional_summary))
                         completed_regions = result.get('completed_regions', len(regional_summary))
                         
-                        if self.output_format not in ['json', 'yaml']:
+                        if verbose and self.output_format not in ['json', 'yaml']:
                             self.console.print(f"[dim]DEBUG: total_regions={total_regions}, completed_regions={completed_regions}, found result_ids={len(result_ids)}[/dim]")
                         
                         # If we're missing results, wait a bit and refetch
@@ -512,7 +513,7 @@ class OnDemandChecksCommand(BaseCommand):
                                         if 'result_id' in regional_result:
                                             result_ids.append(regional_result['result_id'])
                                     
-                                    if self.output_format not in ['json', 'yaml']:
+                                    if verbose and self.output_format not in ['json', 'yaml']:
                                         self.console.print(f"[dim]DEBUG: After retry, found {len(result_ids)} result_ids[/dim]")
                     
                     elif 'result_id' in result:
@@ -852,7 +853,7 @@ class OnDemandChecksCommand(BaseCommand):
                                 time.sleep(0.5)  # Brief pause to show completion
                             
                             # Fetch and display the actual result
-                            self._fetch_and_display_job_result(job_id, job_status)
+                            self._fetch_and_display_job_result(job_id, job_status, verbose=self.verbose)
                             return
                         
                         elif job_status.status == 'running':
@@ -904,6 +905,12 @@ def get_output_format():
     return get_config().get('output_format', 'table')
 
 
+def get_verbose_mode():
+    """Get verbose mode from config"""
+    from ..utils.config import get_config
+    return get_config().get('verbose', False)
+
+
 @run_app.command("custom")
 def run_custom_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
@@ -931,7 +938,7 @@ def run_custom_check(
     - tcp: --host required, --port optional  
     - ssl: --url or --host required
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
-    on_demand_cmd = OnDemandChecksCommand(get_output_format())
+    on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, not no_wait)
 
 
@@ -941,7 +948,7 @@ def run_existing_check(
     no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for job completion, just queue the check and return job ID"),
 ):
     """Execute existing check on demand. By default, waits for job completion and shows result immediately (max 5 minutes). Use --no-wait to just queue the check."""
-    on_demand_cmd = OnDemandChecksCommand(get_output_format())
+    on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     on_demand_cmd.execute_existing_check(check_id, not no_wait)
 
 
@@ -951,7 +958,7 @@ def list_jobs(
     page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page"),
 ):
     """List check jobs"""
-    on_demand_cmd = OnDemandChecksCommand(get_output_format())
+    on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     on_demand_cmd.list_jobs(page, page_size)
 
 
@@ -960,5 +967,5 @@ def get_job_status(
     job_id: str = typer.Argument(..., help="Job ID to get status for"),
 ):
     """Get job status and results. For multi-region executions, shows aggregated statistics and regional summary."""
-    on_demand_cmd = OnDemandChecksCommand(get_output_format())
+    on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     on_demand_cmd.get_job_status(job_id)
