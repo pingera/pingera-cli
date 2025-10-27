@@ -971,7 +971,15 @@ class ChecksCommand(BaseCommand):
         """Display detailed result information in a rich format"""
 
         # Basic information
-        response_time_display = f"{result.response_time}ms" if hasattr(result, 'response_time') and result.response_time else 'N/A'
+        # Handle response time display: 0 means <1ms, None/missing means N/A
+        if hasattr(result, 'response_time') and result.response_time is not None:
+            if result.response_time == 0:
+                response_time_display = "<1ms"
+            else:
+                response_time_display = f"{result.response_time}ms"
+        else:
+            response_time_display = 'N/A'
+        
         basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
 • Result ID: [white]{result.id}[/white]
 • Check ID: [white]{result.check_id}[/white]
