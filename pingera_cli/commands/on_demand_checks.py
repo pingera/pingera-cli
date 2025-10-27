@@ -547,12 +547,14 @@ class OnDemandChecksCommand(BaseCommand):
         self.console.print(f"\n[bold cyan]Multi-Region Execution Result[/bold cyan]")
         self.console.print(f"• Job ID: [white]{job_id}[/white]")
         self.console.print(f"• Status: [{status_color}]{status_emoji} {job_status.status}[/{status_color}]")
-        self.console.print(f"• Regions: [white]{len(result_ids)}[/white]")
         
         # Extract and display aggregated statistics
         if hasattr(job_status, 'result') and isinstance(job_status.result, dict):
             result = job_status.result
             regional_summary = result.get('regional_summary', [])
+            
+            # Display region count from actual regional_summary
+            self.console.print(f"• Regions: [white]{len(regional_summary)}[/white]")
             
             if regional_summary:
                 # Calculate aggregated statistics
