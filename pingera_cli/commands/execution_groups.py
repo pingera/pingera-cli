@@ -71,22 +71,35 @@ class ExecutionGroupsCommand(BaseCommand):
             if self.output_format in ['json', 'yaml']:
                 groups_data = []
                 for group in response.execution_groups:
+                    # Calculate region counts from requested_regions and regional_summary
+                    total_regions = len(group.requested_regions) if hasattr(group, 'requested_regions') and group.requested_regions else 0
+                    successful_regions = 0
+                    failed_regions = 0
+                    completed_regions = 0
+                    if hasattr(group, 'regional_summary') and group.regional_summary:
+                        for region, data in group.regional_summary.items():
+                            if isinstance(data, dict):
+                                completed_regions += 1
+                                if data.get('status') == 'ok':
+                                    successful_regions += 1
+                                else:
+                                    failed_regions += 1
+                    
                     group_dict = {
                         "id": str(group.id) if hasattr(group, 'id') and group.id else None,
                         "check_id": group.check_id if hasattr(group, 'check_id') else None,
                         "created_at": group.created_at.isoformat() if hasattr(group, 'created_at') and group.created_at else None,
                         "status": group.status if hasattr(group, 'status') else None,
-                        "regions_count": group.regions_count if hasattr(group, 'regions_count') else None,
-                        "completed_regions": group.completed_regions if hasattr(group, 'completed_regions') else None,
+                        "requested_regions": group.requested_regions if hasattr(group, 'requested_regions') else [],
                         "statistics": {
-                            "total_regions": group.statistics.total_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'total_regions') else None,
-                            "completed_regions": group.statistics.completed_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'completed_regions') else None,
-                            "successful_regions": group.statistics.successful_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'successful_regions') else None,
-                            "failed_regions": group.statistics.failed_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'failed_regions') else None,
+                            "total_regions": total_regions,
+                            "completed_regions": completed_regions,
+                            "successful_regions": successful_regions,
+                            "failed_regions": failed_regions,
                             "avg_response_time": group.statistics.avg_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'avg_response_time') else None,
                             "min_response_time": group.statistics.min_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'min_response_time') else None,
                             "max_response_time": group.statistics.max_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'max_response_time') else None
-                        } if hasattr(group, 'statistics') and group.statistics else None
+                        }
                     }
                     groups_data.append(group_dict)
 
@@ -116,21 +129,24 @@ class ExecutionGroupsCommand(BaseCommand):
                     status_color = "green" if status == "completed" else "yellow" if status == "running" else "red"
                     status_display = f"[{status_color}]{status}[/{status_color}]"
                     
-                    # Regions progress
+                    # Regions progress - use requested_regions instead
                     regions_display = "-"
-                    if hasattr(group, 'statistics') and group.statistics:
-                        stats = group.statistics
-                        total = stats.total_regions if hasattr(stats, 'total_regions') else 0
-                        completed = stats.completed_regions if hasattr(stats, 'completed_regions') else 0
+                    if hasattr(group, 'requested_regions') and group.requested_regions:
+                        total = len(group.requested_regions)
+                        # Check if execution is completed to determine completed count
+                        completed = total if (hasattr(group, 'status') and group.status == 'completed') else 0
                         regions_display = f"{completed}/{total}"
                     
-                    # Success rate
+                    # Success rate - calculate from regional_summary if available
                     success_rate_display = "-"
-                    if hasattr(group, 'statistics') and group.statistics:
-                        stats = group.statistics
-                        total = stats.total_regions if hasattr(stats, 'total_regions') else 0
-                        successful = stats.successful_regions if hasattr(stats, 'successful_regions') else 0
-                        if total > 0:
+                    if hasattr(group, 'requested_regions') and group.requested_regions:
+                        total = len(group.requested_regions)
+                        # Try to get success count from regional_summary
+                        successful = 0
+                        if hasattr(group, 'regional_summary') and group.regional_summary:
+                            successful = sum(1 for region, data in group.regional_summary.items() 
+                                           if isinstance(data, dict) and data.get('status') == 'ok')
+                        if total > 0 and successful > 0:
                             rate = (successful / total) * 100
                             color = "green" if rate >= 80 else "yellow" if rate >= 50 else "red"
                             success_rate_display = f"[{color}]{rate:.1f}%[/{color}]"
@@ -164,23 +180,37 @@ class ExecutionGroupsCommand(BaseCommand):
             group = groups_api.v1_execution_groups_group_id_get(group_id=group_id)
 
             if self.output_format in ['json', 'yaml']:
+                # Calculate region counts from requested_regions and regional_summary
+                total_regions = len(group.requested_regions) if hasattr(group, 'requested_regions') and group.requested_regions else 0
+                successful_regions = 0
+                failed_regions = 0
+                completed_regions = 0
+                if hasattr(group, 'regional_summary') and group.regional_summary:
+                    for region, data in group.regional_summary.items():
+                        if isinstance(data, dict):
+                            completed_regions += 1
+                            if data.get('status') == 'ok':
+                                successful_regions += 1
+                            else:
+                                failed_regions += 1
+                
                 group_data = {
                     "id": str(group.id) if hasattr(group, 'id') and group.id else None,
                     "check_id": group.check_id if hasattr(group, 'check_id') else None,
                     "created_at": group.created_at.isoformat() if hasattr(group, 'created_at') and group.created_at else None,
                     "completed_at": group.completed_at.isoformat() if hasattr(group, 'completed_at') and group.completed_at else None,
                     "status": group.status if hasattr(group, 'status') else None,
-                    "regions_count": group.regions_count if hasattr(group, 'regions_count') else None,
-                    "completed_regions": group.completed_regions if hasattr(group, 'completed_regions') else None,
+                    "requested_regions": group.requested_regions if hasattr(group, 'requested_regions') else [],
+                    "regional_summary": group.regional_summary if hasattr(group, 'regional_summary') else None,
                     "statistics": {
-                        "total_regions": group.statistics.total_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'total_regions') else None,
-                        "completed_regions": group.statistics.completed_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'completed_regions') else None,
-                        "successful_regions": group.statistics.successful_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'successful_regions') else None,
-                        "failed_regions": group.statistics.failed_regions if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'failed_regions') else None,
+                        "total_regions": total_regions,
+                        "completed_regions": completed_regions,
+                        "successful_regions": successful_regions,
+                        "failed_regions": failed_regions,
                         "avg_response_time": group.statistics.avg_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'avg_response_time') else None,
                         "min_response_time": group.statistics.min_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'min_response_time') else None,
                         "max_response_time": group.statistics.max_response_time if hasattr(group, 'statistics') and group.statistics and hasattr(group.statistics, 'max_response_time') else None
-                    } if hasattr(group, 'statistics') and group.statistics else None
+                    }
                 }
                 self.output_data(group_data)
             else:
@@ -195,13 +225,23 @@ class ExecutionGroupsCommand(BaseCommand):
 • Completed: [white]{group.completed_at.strftime('%Y-%m-%d %H:%M:%S UTC') if hasattr(group, 'completed_at') and group.completed_at else 'Not completed'}[/white]"""
 
                 stats_info = ""
-                if hasattr(group, 'statistics') and group.statistics:
-                    stats = group.statistics
+                
+                # Calculate regional stats from requested_regions and regional_summary
+                if hasattr(group, 'requested_regions') and group.requested_regions:
+                    total_regions = len(group.requested_regions)
+                    successful_regions = 0
+                    failed_regions = 0
+                    completed_regions = 0
                     
-                    total_regions = stats.total_regions if hasattr(stats, 'total_regions') else 0
-                    completed_regions = stats.completed_regions if hasattr(stats, 'completed_regions') else 0
-                    successful_regions = stats.successful_regions if hasattr(stats, 'successful_regions') else 0
-                    failed_regions = stats.failed_regions if hasattr(stats, 'failed_regions') else 0
+                    # Parse regional_summary to get actual counts
+                    if hasattr(group, 'regional_summary') and group.regional_summary:
+                        for region, data in group.regional_summary.items():
+                            if isinstance(data, dict):
+                                completed_regions += 1
+                                if data.get('status') == 'ok':
+                                    successful_regions += 1
+                                else:
+                                    failed_regions += 1
                     
                     success_rate = (successful_regions / total_regions * 100) if total_regions > 0 else 0
                     success_color = "green" if success_rate >= 80 else "yellow" if success_rate >= 50 else "red"
@@ -213,6 +253,10 @@ class ExecutionGroupsCommand(BaseCommand):
 • Successful: [green]{successful_regions}[/green]
 • Failed: [red]{failed_regions}[/red]
 • Success Rate: [{success_color}]{success_rate:.1f}%[/{success_color}]"""
+                
+                # Add response time stats if available from statistics object
+                if hasattr(group, 'statistics') and group.statistics:
+                    stats = group.statistics
                     
                     if hasattr(stats, 'avg_response_time') and stats.avg_response_time is not None:
                         avg_resp = stats.avg_response_time
