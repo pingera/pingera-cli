@@ -1047,7 +1047,6 @@ class ChecksCommand(BaseCommand):
             else:
                 response = checks_api.v1_checks_get_regions_get()
 
-            print(f"#### {response}")
             if not hasattr(response, 'regions') or not response.regions:
                 if self.output_format in ['json', 'yaml']:
                     self.output_data({"regions": [], "total": 0, "message": "No regions found"})
