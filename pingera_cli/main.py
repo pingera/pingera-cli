@@ -116,13 +116,100 @@ def web_alias(
     )
 
 
+@app.command("api", rich_help_panel="🚀 Quick Commands")
+def api_alias(
+    url: str = typer.Argument(..., help="API endpoint URL to check"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick API check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=url,
+        check_type="api",
+        host=None,
+        port=None,
+        timeout=None,
+        name=f"API check {url}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("ssl", rich_help_panel="🚀 Quick Commands")
+def ssl_alias(
+    target: str = typer.Argument(..., help="Host or URL to check SSL certificate"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick SSL certificate check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    
+    # Detect if target is a URL or hostname
+    if target.startswith('http://') or target.startswith('https://'):
+        url = target
+        host = None
+    else:
+        url = None
+        host = target
+    
+    cmd.execute_custom_check(
+        url=url,
+        check_type="ssl",
+        host=host,
+        port=None,
+        timeout=None,
+        name=f"SSL check {target}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("dns", rich_help_panel="🚀 Quick Commands")
+def dns_alias(
+    domain: str = typer.Argument(..., help="Domain to check DNS records"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick DNS check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=None,
+        check_type="dns",
+        host=domain,
+        port=None,
+        timeout=None,
+        name=f"DNS check {domain}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
 @app.command("syn", rich_help_panel="🚀 Quick Commands")
 def synthetic_alias(
     script_file: str = typer.Argument(..., help="Path to Playwright script file"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
     no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
 ):
-    """Quick synthetic/multistep check"""
+    """Quick synthetic check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
     
@@ -134,6 +221,32 @@ def synthetic_alias(
         port=None,
         timeout=None,
         name=f"Synthetic check",
+        regions=region,
+        parameters=None,
+        pw_script_file=script_file,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("multistep", rich_help_panel="🚀 Quick Commands")
+def multistep_alias(
+    script_file: str = typer.Argument(..., help="Path to Playwright script file"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick multistep check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=None,
+        check_type="multistep",
+        host=None,
+        port=None,
+        timeout=None,
+        name=f"Multistep check",
         regions=region,
         parameters=None,
         pw_script_file=script_file,
