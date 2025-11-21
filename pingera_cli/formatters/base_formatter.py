@@ -47,10 +47,6 @@ class BaseFormatter(ABC):
     def _get_truncation_notice(self, result_id: str = None) -> str:
         """Get truncation notice with result_id if available"""
         if result_id:
-            return f"""
-💡 Some details truncated. Use --verbose flag or view full results at:
-   https://app.pingera.ru/checks/jobs/{result_id}
-   pngr checks result {result_id} --verbose"""
+            return f"\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]\n[dim]   https://app.pingera.ru/checks/jobs/{result_id}[/dim]\n[dim]   pngr checks result {result_id} --verbose[/dim]"
         else:
-            return """
-💡 Some details truncated. Use --verbose flag for full details."""
+            return "\n[dim]💡 Some details truncated. Use --verbose flag for full details.[/dim]"

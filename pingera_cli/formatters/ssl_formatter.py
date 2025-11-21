@@ -16,6 +16,10 @@ class SSLFormatter(BaseFormatter):
     def format(self, metadata: Dict[str, Any]) -> str:
         """Format SSL check metadata"""
         info = "\n[bold cyan]SSL Check Results:[/bold cyan]"
+        
+        # Track if we need to show truncation notice
+        has_truncation = False
+        result_id = metadata.get('result_id')
 
         # SSL Grade and Score
         if 'ssl_grade' in metadata:
@@ -32,17 +36,27 @@ class SSLFormatter(BaseFormatter):
 
         # Protocol Support
         if 'checks' in metadata and 'protocol_support' in metadata['checks']:
-            info += self._format_protocol_support(metadata['checks']['protocol_support'])
+            protocol_info, truncated = self._format_protocol_support(metadata['checks']['protocol_support'])
+            info += protocol_info
+            if truncated:
+                has_truncation = True
 
         # Vulnerabilities
         if 'checks' in metadata and 'vulnerabilities' in metadata['checks']:
-            info += self._format_vulnerabilities(metadata['checks']['vulnerabilities'])
+            vuln_info, truncated = self._format_vulnerabilities(metadata['checks']['vulnerabilities'])
+            info += vuln_info
+            if truncated:
+                has_truncation = True
 
         # Assessment Summary
         if 'deduction_summary' in metadata:
             info += "\n\n[bold cyan]Assessment Summary:[/bold cyan]"
             for summary in metadata['deduction_summary']:
                 info += f"\n• [dim]{summary}[/dim]"
+        
+        # Show truncation notice once at the bottom if needed
+        if has_truncation and not self.verbose:
+            info += "\n" + self._get_truncation_notice(result_id)
 
         return info
 
@@ -75,8 +89,8 @@ class SSLFormatter(BaseFormatter):
 
         return info
 
-    def _format_protocol_support(self, protocols: Dict[str, Any]) -> str:
-        """Format protocol support information"""
+    def _format_protocol_support(self, protocols: Dict[str, Any]) -> tuple:
+        """Format protocol support information. Returns (info, has_truncation)"""
         info = "\n\n[bold cyan]Protocol Support:[/bold cyan]"
         has_many_ciphers = False
 
@@ -89,14 +103,10 @@ class SSLFormatter(BaseFormatter):
             else:
                 info += f"\n• {protocol.upper().replace('_', '.')}: [red]❌ Not Supported[/red]"
 
-        if has_many_ciphers and not self.verbose:
-            info += "\n\n[dim]💡 Cipher details not shown. Use --verbose flag for full cipher list or view at:[/dim]"
-            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+        return info, has_many_ciphers
 
-        return info
-
-    def _format_vulnerabilities(self, vulns: Dict[str, Any]) -> str:
-        """Format vulnerability information"""
+    def _format_vulnerabilities(self, vulns: Dict[str, Any]) -> tuple:
+        """Format vulnerability information. Returns (info, has_truncation)"""
         info = "\n\n[bold cyan]Security Vulnerabilities:[/bold cyan]"
         has_truncation = False
 
@@ -119,21 +129,6 @@ class SSLFormatter(BaseFormatter):
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
 
-        if has_truncation and not self.verbose:
-            result_id = vulns.get('result_id') # Assuming result_id might be available here or passed differently
-            info += self._get_truncation_notice(result_id)
-            info += "\n"
+        return info, has_truncation
 
-        return info
-
-    def _get_truncation_notice(self, result_id: str | None) -> str:
-        """Helper to get the truncation notice string"""
-        notice = "[dim]💡 Some details truncated."
-        if result_id:
-            notice += f" Use --verbose flag or view full results at:"
-            notice += f"\n[dim]   https://app.pingera.ru/checks/jobs/{result_id}"
-        else:
-            notice += " Use --verbose flag or view full results at:"
-            notice += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)"
-        notice += "\n[dim]pngr checks result {result_id} --verbose[/dim]" if result_id else ""
-        return notice
+    
