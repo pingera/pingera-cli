@@ -1062,6 +1062,7 @@ class ChecksCommand(BaseCommand):
                     region_dict = {
                         "id": str(region.id) if hasattr(region, 'id') and region.id else None,
                         "display_name": region.display_name if hasattr(region, 'display_name') and region.display_name else None,
+                        "aliases": region.aliases if hasattr(region, 'aliases') and region.aliases else None,
                         "available_check_types": region.available_check_types if hasattr(region, 'available_check_types') and region.available_check_types else None
                     }
                     regions_data.append(region_dict)
@@ -1077,12 +1078,21 @@ class ChecksCommand(BaseCommand):
                 table = Table(title=table_title)
                 table.add_column("Region ID", style="cyan", min_width=15)
                 table.add_column("Display Name", style="green", min_width=25)
+                table.add_column("Aliases", style="yellow", min_width=20)
                 table.add_column("Available Check Types", style="white")
 
                 for region in response.regions:
                     # Extract region data using actual SDK attributes
                     region_id = str(region.id) if hasattr(region, 'id') and region.id else "-"
                     display_name = region.display_name if hasattr(region, 'display_name') and region.display_name else "-"
+
+                    # Handle aliases
+                    aliases_display = "-"
+                    if hasattr(region, 'aliases') and region.aliases:
+                        if isinstance(region.aliases, list):
+                            aliases_display = ", ".join(region.aliases)
+                        else:
+                            aliases_display = str(region.aliases)
 
                     # Handle available check types
                     available_types = "-"
@@ -1095,6 +1105,7 @@ class ChecksCommand(BaseCommand):
                     table.add_row(
                         region_id,
                         display_name,
+                        aliases_display,
                         available_types
                     )
 
