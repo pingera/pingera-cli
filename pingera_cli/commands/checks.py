@@ -946,6 +946,7 @@ class ChecksCommand(BaseCommand):
                 check_result_id=result_id
             )
 
+            print(f"#### {result}")
             if self.output_format in ['json', 'yaml']:
                 # Full result data for JSON/YAML
                 result_data = {
