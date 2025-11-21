@@ -116,14 +116,19 @@ class SSLFormatter(BaseFormatter):
                 if 'details' in vuln_data:
                     details = vuln_data['details']
                     if isinstance(details, list):
-                        # Show first 3 items, then indicate there are more
-                        display_items = details[:3]
-                        for item in display_items:
-                            info += f"\n  [dim]{item}[/dim]"
-                        if len(details) > 3:
-                            remaining = len(details) - 3
-                            info += f"\n  [dim]... and {remaining} more item(s)[/dim]"
-                            has_truncation = True
+                        if self.verbose:
+                            # Show all items in verbose mode
+                            for item in details:
+                                info += f"\n  [dim]{item}[/dim]"
+                        else:
+                            # Show first 3 items in non-verbose mode
+                            display_items = details[:3]
+                            for item in display_items:
+                                info += f"\n  [dim]{item}[/dim]"
+                            if len(details) > 3:
+                                remaining = len(details) - 3
+                                info += f"\n  [dim]... and {remaining} more item(s)[/dim]"
+                                has_truncation = True
                     else:
                         info += f"\n  [dim]{details}[/dim]"
             else:
