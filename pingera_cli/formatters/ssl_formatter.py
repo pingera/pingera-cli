@@ -79,26 +79,49 @@ class SSLFormatter(BaseFormatter):
     def _format_protocol_support(self, protocols: Dict[str, Any]) -> str:
         """Format protocol support information"""
         info = "\n\n[bold cyan]Protocol Support:[/bold cyan]"
+        has_many_ciphers = False
         
         for protocol, details in protocols.items():
             if details.get('supported'):
                 cipher_count = len(details.get('ciphers', []))
                 info += f"\n• {protocol.upper().replace('_', '.')}: [green]✅ Supported[/green] ({cipher_count} ciphers)"
+                if cipher_count > 10:
+                    has_many_ciphers = True
             else:
                 info += f"\n• {protocol.upper().replace('_', '.')}: [red]❌ Not Supported[/red]"
+        
+        if has_many_ciphers and not self.verbose:
+            info += "\n\n[dim]💡 Cipher details not shown. Use --verbose flag for full cipher list or view at:[/dim]"
+            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
         
         return info
     
     def _format_vulnerabilities(self, vulns: Dict[str, Any]) -> str:
         """Format vulnerability information"""
         info = "\n\n[bold cyan]Security Vulnerabilities:[/bold cyan]"
+        has_truncation = False
         
         for vuln_name, vuln_data in vulns.items():
             if vuln_data.get('vulnerable'):
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [red]❌ Vulnerable[/red]"
                 if 'details' in vuln_data:
-                    info += f"\n  [dim]{vuln_data['details']}[/dim]"
+                    details = vuln_data['details']
+                    if isinstance(details, list):
+                        # Show first 3 items, then indicate there are more
+                        display_items = details[:3]
+                        for item in display_items:
+                            info += f"\n  [dim]{item}[/dim]"
+                        if len(details) > 3:
+                            remaining = len(details) - 3
+                            info += f"\n  [dim]... and {remaining} more item(s)[/dim]"
+                            has_truncation = True
+                    else:
+                        info += f"\n  [dim]{details}[/dim]"
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
+        
+        if has_truncation and not self.verbose:
+            info += "\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]"
+            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
         
         return info
