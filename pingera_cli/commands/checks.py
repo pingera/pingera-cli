@@ -918,10 +918,8 @@ class ChecksCommand(BaseCommand):
 
                 # Provide helpful hints based on context
                 hints = []
-                if check_id:
-                    hints.append(f"Use 'pngr checks result {check_id} <result-id>' for detailed result info")
-                else:
-                    hints.append("Use 'pngr checks results --result-id <result-id>' for detailed result info")
+                hints.append("Use 'pngr checks result <result-id>' for detailed result info")
+                if not check_id:
                     hints.append("Use 'pngr checks list' to see all available checks and their IDs")
                     hints.append("Filter results: --type <type>, --status <status>, --region <region>")
 
@@ -952,16 +950,19 @@ class ChecksCommand(BaseCommand):
             self.display_error(f"Failed to get result details: {str(e)}")
             raise typer.Exit(1)
 
-    def get_check_result_detailed(self, check_id: str, result_id: str, verbose: bool = False):
-        """Get detailed information for a specific check result using check_id and result_id"""
+    def get_check_result_detailed(self, result_id: str, verbose: bool = False):
+        """Get detailed information for a specific check result using result_id"""
         try:
-            checks_api = self.get_client()
+            unified_api = self.get_unified_results_client()
 
-            # Use the actual SDK method
-            result = checks_api.v1_checks_check_id_results_check_result_id_get(
-                check_id=check_id,
-                check_result_id=result_id
-            )
+            # Use the unified results API with result_id filter
+            response = unified_api.v1_checks_all_results_get(result_id=result_id)
+
+            if not hasattr(response, 'results') or not response.results or len(response.results) == 0:
+                self.display_error(f"Result {result_id} not found")
+                raise typer.Exit(1)
+
+            result = response.results[0]
 
             if self.output_format in ['json', 'yaml']:
                 # Full result data for JSON/YAML
@@ -1331,14 +1332,13 @@ def get_results(
 
 @app.command("result")
 def get_result(
-    check_id: str = typer.Argument(..., help="Check ID"),
     result_id: str = typer.Argument(..., help="Result ID to retrieve detailed information for"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full detailed information including network requests"),
 ):
     """Get detailed information for a specific check result"""
     from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.get_check_result_detailed(check_id, result_id, verbose)
+    checks_cmd.get_check_result_detailed(result_id, verbose)
 
 
 @app.command("list-regions")
