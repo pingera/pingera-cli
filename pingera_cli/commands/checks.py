@@ -14,6 +14,9 @@ from rich.prompt import Confirm
 from .base import BaseCommand
 from ..utils.config import get_api_key
 
+# Supported check types
+SUPPORTED_CHECK_TYPES = ["web", "api", "tcp", "ssl", "dns", "icmp", "portscan", "synthetic", "multistep"]
+
 
 class ChecksCommand(BaseCommand):
     """
@@ -749,7 +752,7 @@ class ChecksCommand(BaseCommand):
             # If result_id was specified, we're fetching a single result - display it with full formatting
             if result_id and len(response.results) == 1:
                 result = response.results[0]
-                
+
                 if self.output_format in ['json', 'yaml']:
                     result_dict = {
                         "id": str(result.id) if hasattr(result, 'id') and result.id else None,
@@ -980,7 +983,7 @@ class ChecksCommand(BaseCommand):
                 response_time_display = f"{result.response_time}ms"
         else:
             response_time_display = 'N/A'
-        
+
         basic_info = f"""[bold cyan]Basic Information:[/bold cyan]
 • Result ID: [white]{result.id}[/white]
 • Check ID: [white]{result.check_id}[/white]
@@ -1170,15 +1173,15 @@ def list_checks(
 ):
     """List monitoring checks with advanced filtering options"""
     from ..utils.config import get_output_format
-    
+
     # Validate name length
     if name and len(name) > 100:
         typer.echo("Error: Name filter cannot exceed 100 characters", err=True)
         raise typer.Exit(1)
 
     # Validate check type
-    if check_type and check_type not in ["web", "api", "ssl", "tcp", "icmp", "dns", "synthetic", "multistep"]:
-        typer.echo("Error: Invalid check type. Must be one of: web, api, ssl, tcp, icmp, dns, synthetic, multistep", err=True)
+    if check_type and check_type not in SUPPORTED_CHECK_TYPES:
+        typer.echo(f"Error: Invalid check type '{check_type}'. Must be one of: {', '.join(SUPPORTED_CHECK_TYPES)}", err=True)
         raise typer.Exit(1)
 
     # Validate status values if provided
@@ -1237,6 +1240,11 @@ def create_check(
         typer.echo("Error: --name is required when not using --from-file", err=True)
         raise typer.Exit(1)
 
+    # Validate check type
+    if check_type not in SUPPORTED_CHECK_TYPES:
+        typer.echo(f"Error: Invalid check type '{check_type}'. Must be one of: {', '.join(SUPPORTED_CHECK_TYPES)}", err=True)
+        raise typer.Exit(1)
+
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file)
 
@@ -1285,6 +1293,12 @@ def get_results(
 ):
     """Get check results with advanced filtering. If no check_id is provided, returns unified results across all checks. Use --result-id to fetch a specific result."""
     from ..utils.config import get_output_format
+
+    # Validate check type
+    if check_type and check_type not in SUPPORTED_CHECK_TYPES:
+        typer.echo(f"Error: Invalid check type '{check_type}'. Must be one of: {', '.join(SUPPORTED_CHECK_TYPES)}", err=True)
+        raise typer.Exit(1)
+
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.get_check_results(check_id, from_date, to_date, page, page_size, status, check_type, region, result_id)
 
@@ -1307,6 +1321,12 @@ def list_regions(
 ):
     """List available regions for monitoring checks"""
     from ..utils.config import get_output_format
+
+    # Validate check type
+    if check_type and check_type not in SUPPORTED_CHECK_TYPES:
+        typer.echo(f"Error: Invalid check type '{check_type}'. Must be one of: {', '.join(SUPPORTED_CHECK_TYPES)}", err=True)
+        raise typer.Exit(1)
+
     checks_cmd = ChecksCommand(get_output_format())
     checks_cmd.list_regions(check_type)
 

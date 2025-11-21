@@ -13,6 +13,9 @@ from rich.panel import Panel
 from .base import BaseCommand
 from ..utils.config import get_api_key
 
+# Supported check types for on-demand execution
+SUPPORTED_CHECK_TYPES = ["web", "api", "tcp", "ssl", "dns", "icmp", "portscan", "synthetic", "multistep"]
+
 
 class OnDemandChecksCommand(BaseCommand):
     """
@@ -203,11 +206,17 @@ class OnDemandChecksCommand(BaseCommand):
             
             # Validation based on check type - use the actual type from check_data
             actual_check_type = check_data.get("type", check_type)
+            
+            # Validate check type is supported
+            if actual_check_type not in SUPPORTED_CHECK_TYPES:
+                self.display_error(f"Invalid check type: {actual_check_type}. Supported types: {', '.join(SUPPORTED_CHECK_TYPES)}")
+                raise typer.Exit(1)
+            
             if actual_check_type in ['web', 'api'] and not url:
                 self.display_error(f"URL is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
-            if actual_check_type in ['tcp', 'portscan'] and not host:
+            if actual_check_type in ['tcp', 'portscan', 'dns', 'icmp'] and not host:
                 self.display_error(f"Host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
@@ -966,8 +975,8 @@ def get_verbose_mode():
 @run_app.command("custom")
 def run_custom_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
-    check_type: str = typer.Option("web", "--type", "-t", help="Check type (web, api, tcp, ssl, synthetic, multistep, portscan)"),
-    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/portscan checks (max 255 characters)"),
+    check_type: str = typer.Option("web", "--type", "-t", help=f"Check type: {', '.join(SUPPORTED_CHECK_TYPES)}"),
+    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/portscan/DNS/ICMP checks (max 255 characters)"),
     port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
     timeout: Optional[int] = typer.Option(None, "--timeout", help="Timeout in seconds (optional - backend will use defaults if not specified)"),
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
