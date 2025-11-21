@@ -37,6 +37,111 @@ app.add_typer(checks_app, name="checks")
 app.add_typer(secrets_app, name="secrets")
 
 
+# Quick command aliases (separate help section)
+@app.command("ping", rich_help_panel="🚀 Quick Commands")
+def ping_alias(
+    host: str = typer.Argument(..., help="Host to ping"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick ICMP ping check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=None,
+        check_type="icmp",
+        host=host,
+        port=None,
+        timeout=None,
+        name=f"Ping {host}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("scan", rich_help_panel="🚀 Quick Commands")
+def scan_alias(
+    host: str = typer.Argument(..., help="Host to scan"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick port scan check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=None,
+        check_type="portscan",
+        host=host,
+        port=None,
+        timeout=None,
+        name=f"Port scan {host}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("web", rich_help_panel="🚀 Quick Commands")
+def web_alias(
+    url: str = typer.Argument(..., help="URL to check"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick web check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=url,
+        check_type="web",
+        host=None,
+        port=None,
+        timeout=None,
+        name=f"Web check {url}",
+        regions=region,
+        parameters=None,
+        pw_script_file=None,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
+@app.command("syn", rich_help_panel="🚀 Quick Commands")
+def synthetic_alias(
+    script_file: str = typer.Argument(..., help="Path to Playwright script file"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
+):
+    """Quick synthetic/multistep check"""
+    from .commands.on_demand_checks import OnDemandChecksCommand
+    from .utils.config import get_output_format, get_verbose_mode
+    
+    cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
+    cmd.execute_custom_check(
+        url=None,
+        check_type="synthetic",
+        host=None,
+        port=None,
+        timeout=None,
+        name=f"Synthetic check",
+        regions=region,
+        parameters=None,
+        pw_script_file=script_file,
+        from_file=None,
+        wait_for_result=not no_wait
+    )
+
+
 @app.command("version")
 def version():
     """
