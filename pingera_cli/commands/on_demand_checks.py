@@ -64,7 +64,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: int = 30, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
+    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: Optional[int] = None, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
         """Execute custom on-demand check"""
         try:
             import json
@@ -86,9 +86,14 @@ class OnDemandChecksCommand(BaseCommand):
                 # Command line options take precedence over file data
                 check_data = {
                     "name": filtered_file_data.get("name", name),
-                    "type": filtered_file_data.get("type", check_type),
-                    "timeout": filtered_file_data.get("timeout", timeout)
+                    "type": filtered_file_data.get("type", check_type)
                 }
+                
+                # Handle timeout - only set if explicitly provided or in file
+                if timeout is not None:
+                    check_data["timeout"] = timeout
+                elif "timeout" in filtered_file_data:
+                    check_data["timeout"] = filtered_file_data["timeout"]
                 
                 # Override with command line values if provided
                 if name != "On-demand check":  # Only override if name was explicitly provided
@@ -142,9 +147,12 @@ class OnDemandChecksCommand(BaseCommand):
                 # Build check data normally
                 check_data = {
                     "name": name,
-                    "type": check_type,
-                    "timeout": timeout
+                    "type": check_type
                 }
+                
+                # Only set timeout if explicitly provided by user
+                if timeout is not None:
+                    check_data["timeout"] = timeout
             
             # Add URL if provided (required for web, api, ssl checks)
             if url is not None:
@@ -199,7 +207,7 @@ class OnDemandChecksCommand(BaseCommand):
                 self.display_error(f"URL is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
-            if actual_check_type in ['tcp'] and not host:
+            if actual_check_type in ['tcp', 'portscan'] and not host:
                 self.display_error(f"Host is required for {actual_check_type} checks")
                 raise typer.Exit(1)
             
@@ -958,10 +966,10 @@ def get_verbose_mode():
 @run_app.command("custom")
 def run_custom_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
-    check_type: str = typer.Option("web", "--type", "-t", help="Check type (web, api, tcp, ssl, synthetic, multistep)"),
-    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL checks (max 255 characters)"),
+    check_type: str = typer.Option("web", "--type", "-t", help="Check type (web, api, tcp, ssl, synthetic, multistep, portscan)"),
+    host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/portscan checks (max 255 characters)"),
     port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
-    timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
+    timeout: Optional[int] = typer.Option(None, "--timeout", help="Timeout in seconds (optional - backend will use defaults if not specified)"),
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
@@ -981,7 +989,10 @@ def run_custom_check(
     - web/api: --url required
     - tcp: --host required, --port optional  
     - ssl: --url or --host required
-    - synthetic/multistep: --pw-script-file or --parameters with pw_script required"""
+    - portscan: --host required
+    - synthetic/multistep: --pw-script-file or --parameters with pw_script required
+    
+    Timeout is optional - if not specified, backend will use appropriate defaults for each check type."""
     on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, not no_wait)
 
