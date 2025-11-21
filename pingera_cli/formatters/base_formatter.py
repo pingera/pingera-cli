@@ -47,10 +47,8 @@ class BaseFormatter(ABC):
         return f"{duration_ms:.0f}ms" if duration_ms > 0 else "0ms"
     
     def _get_truncation_note(self) -> str:
-        """Get standardized truncation note with job ID and command"""
+        """Get standardized truncation note with result ID and command"""
         if self.result_id:
-            return f"\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]\n[dim]   https://app.pingera.ru/checks/results/{self.result_id}[/dim]\n[dim]   Or run: [white]pngr checks results --result-id {self.result_id}[/white][/dim]"
-        elif self.job_id:
-            return f"\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]\n[dim]   https://app.pingera.ru/checks/jobs/{self.job_id}[/dim]\n[dim]   Or run: [white]pngr checks jobs status {self.job_id} --verbose[/white][/dim]"
+            return f"\n\n[dim]💡 Some details truncated. View full results at: https://app.pingera.ru/checks/results/{self.result_id}[/dim]\n[dim]   Or run: [white]pngr checks results --result-id {self.result_id} --verbose[/white][/dim]"
         else:
             return "\n\n[dim]💡 Some details truncated. Use --verbose flag for full results.[/dim]"

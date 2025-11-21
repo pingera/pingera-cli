@@ -1,66 +1,51 @@
-
 """
 DNS check result formatter
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from .base_formatter import BaseFormatter
 
 
-class DNSFormatter(BaseFormatter):
+class DnsFormatter(BaseFormatter):
     """Formatter for DNS check results"""
-    
+
     def can_format(self, metadata: Dict[str, Any]) -> bool:
         """Check if this is DNS metadata"""
-        return 'record_type' in metadata and 'answers' in metadata
-    
+        return 'records' in metadata or 'nameservers' in metadata
+
     def format(self, metadata: Dict[str, Any]) -> str:
         """Format DNS check metadata"""
         info = "\n[bold cyan]DNS Query Results:[/bold cyan]"
-        
+
         # Query information
+        if 'query_type' in metadata:
+            info += f"\n• Query Type: [white]{metadata['query_type']}[/white]"
         if 'domain' in metadata:
             info += f"\n• Domain: [white]{metadata['domain']}[/white]"
-        if 'record_type' in metadata:
-            info += f"\n• Record Type: [blue]{metadata['record_type']}[/blue]"
-        
-        # DNS servers used
-        if 'dns_servers_used' in metadata:
-            servers = metadata['dns_servers_used']
-            if servers == 'system_default':
-                info += f"\n• DNS Servers: [dim]System Default[/dim]"
-            elif isinstance(servers, list):
-                info += f"\n• DNS Servers: [white]{', '.join(servers)}[/white]"
-            else:
-                info += f"\n• DNS Servers: [white]{servers}[/white]"
-        
-        # Validation mode
-        if 'validation_mode' in metadata and metadata['validation_mode'] != 'none':
-            info += f"\n• Validation Mode: [white]{metadata['validation_mode']}[/white]"
-        
-        # DNS answers
-        if 'answers' in metadata and metadata['answers']:
-            info += "\n\n[bold cyan]DNS Answers:[/bold cyan]"
-            for answer in metadata['answers']:
-                info += f"\n• [green]{answer}[/green]"
-        elif 'answers' in metadata:
-            info += "\n\n[bold cyan]DNS Answers:[/bold cyan]"
-            info += f"\n• [yellow]No records found[/yellow]"
-        
-        # Expected answers (if validation was performed)
-        if 'expected_answers' in metadata and metadata['expected_answers']:
-            info += "\n\n[bold cyan]Expected Answers:[/bold cyan]"
-            for expected in metadata['expected_answers']:
-                # Check if this expected answer is in the actual answers
-                is_present = 'answers' in metadata and expected in metadata['answers']
-                color = "green" if is_present else "red"
-                icon = "✅" if is_present else "❌"
-                info += f"\n• [{color}]{icon} {expected}[/{color}]"
-        
-        # Authoritative nameservers in verbose mode
-        if self.verbose and 'authoritative_ns' in metadata and metadata['authoritative_ns']:
-            info += "\n\n[bold cyan]Authoritative Nameservers:[/bold cyan]"
-            for ns in metadata['authoritative_ns']:
-                info += f"\n• [dim]{ns}[/dim]"
-        
+
+        # DNS Records
+        if 'records' in metadata and metadata['records']:
+            records = metadata['records']
+            info += f"\n• Records Found: [green]{len(records)}[/green]"
+
+            # Show first few records
+            display_records = records if self.verbose else records[:5]
+            for record in display_records:
+                record_type = record.get('type', 'Unknown')
+                record_value = record.get('value', 'N/A')
+                info += f"\n  • [{record_type}] {record_value}"
+
+            if not self.verbose and len(records) > 5:
+                info += f"\n  [dim]... and {len(records) - 5} more records[/dim]"
+                info += self._get_truncation_note()
+
+        # Nameservers
+        if 'nameservers' in metadata and metadata['nameservers']:
+            nameservers = metadata['nameservers']
+            info += f"\n• Nameservers: [white]{', '.join(nameservers)}[/white]"
+
+        # Query time
+        if 'query_time' in metadata:
+            info += f"\n• Query Time: [yellow]{metadata['query_time']}ms[/yellow]"
+
         return info
