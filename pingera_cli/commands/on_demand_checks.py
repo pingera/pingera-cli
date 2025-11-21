@@ -730,8 +730,7 @@ class OnDemandChecksCommand(BaseCommand):
             metadata = detailed_result.check_metadata
             
             if isinstance(metadata, dict):
-                result_id = detailed_result.id if hasattr(detailed_result, 'id') else None
-                registry = FormatterRegistry(verbose=self.verbose, job_id=job_id, result_id=result_id)
+                registry = FormatterRegistry(verbose=self.verbose)
                 metadata_info = registry.format_metadata(metadata)
         
         # Combine all sections
@@ -841,8 +840,7 @@ class OnDemandChecksCommand(BaseCommand):
                     # Use the same metadata formatting as check results
                     try:
                         from ..formatters.registry import FormatterRegistry
-                        result_id = result.get('result_id')
-                        registry = FormatterRegistry(verbose=False, job_id=job_id, result_id=result_id)  # Default to non-verbose for job status
+                        registry = FormatterRegistry(verbose=False)  # Default to non-verbose for job status
                         metadata_formatted = registry.format_metadata(metadata)
                         
                         if metadata_formatted.strip():
