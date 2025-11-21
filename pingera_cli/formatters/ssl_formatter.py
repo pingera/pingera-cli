@@ -91,8 +91,7 @@ class SSLFormatter(BaseFormatter):
                 info += f"\n• {protocol.upper().replace('_', '.')}: [red]❌ Not Supported[/red]"
         
         if has_many_ciphers and not self.verbose:
-            info += "\n\n[dim]💡 Cipher details not shown. Use --verbose flag for full cipher list or view at:[/dim]"
-            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+            info += self._get_truncation_note()
         
         return info
     
@@ -121,7 +120,6 @@ class SSLFormatter(BaseFormatter):
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
         
         if has_truncation and not self.verbose:
-            info += "\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]"
-            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+            info += self._get_truncation_note()
         
         return info

@@ -159,8 +159,7 @@ class PortscanFormatter(BaseFormatter):
 
             if not self.verbose and len(open_ports) > 10:
                 info += f"\n[dim]... and {len(open_ports) - 10} more open ports[/dim]"
-                info += "\n\n[dim]💡 Some ports truncated. Use --verbose flag for full list or view at:[/dim]"
-                info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+                info += self._get_truncation_note()
 
         if closed_ports and self.verbose:
             info += f"\n\n[red]Closed Ports:[/red] {len(closed_ports)} ports"

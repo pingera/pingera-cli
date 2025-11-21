@@ -69,8 +69,7 @@ class WebFormatter(BaseFormatter):
 
             if len(headers) > shown_headers:
                 info += f"\n[dim]... and {len(headers) - shown_headers} more headers[/dim]"
-                info += "\n\n[dim]💡 Only security-relevant headers shown. Use --verbose flag for all headers or view at:[/dim]"
-                info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+                info += self._get_truncation_note()
         else:
             # Show all headers in verbose mode
             for key, value in headers.items():
