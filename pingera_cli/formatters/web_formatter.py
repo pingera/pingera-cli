@@ -47,6 +47,12 @@ class WebFormatter(BaseFormatter):
         if 'headers' in metadata:
             info += self._format_headers(metadata['headers'])
 
+        # Add truncation notice at the end with result_id if available
+        if not self.verbose:
+            result_id = metadata.get('result_id')
+            info += self._get_truncation_notice(result_id)
+            info += "\n"
+
         return info
 
     def _format_headers(self, headers: Dict[str, Any]) -> str:

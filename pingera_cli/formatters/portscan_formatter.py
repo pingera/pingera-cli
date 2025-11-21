@@ -159,7 +159,7 @@ class PortscanFormatter(BaseFormatter):
 
             if not self.verbose and len(open_ports) > 10:
                 info += f"\n[dim]... and {len(open_ports) - 10} more open ports[/dim]"
-                info += "\n\n[dim]💡 Some ports truncated. Use --verbose flag for full list or view at:[/dim]"
+                info += "\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]"
                 info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
 
         if closed_ports and self.verbose:
@@ -169,3 +169,21 @@ class PortscanFormatter(BaseFormatter):
             info += f"\n\n[yellow]Filtered Ports:[/yellow] {len(filtered_ports)} ports"
 
         return info
+
+    def _get_truncation_notice(self, result_id: str) -> str:
+        """
+        Generates the truncation notice with a direct link to the web app
+        and the command to view full results.
+        """
+        if result_id:
+            return (
+                f"[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]\n"
+                f"[dim]   https://app.pingera.ru/checks/jobs/{result_id}[/dim]\n"
+                f"[dim]   pngr checks result {result_id} --verbose[/dim]"
+            )
+        else:
+            # Fallback if result_id is not available
+            return (
+                f"[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]\n"
+                f"[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
+            )

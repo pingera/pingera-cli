@@ -1,4 +1,3 @@
-
 """
 SSL check result formatter
 """
@@ -9,48 +8,48 @@ from .base_formatter import BaseFormatter
 
 class SSLFormatter(BaseFormatter):
     """Formatter for SSL check results"""
-    
+
     def can_format(self, metadata: Dict[str, Any]) -> bool:
         """Check if this is SSL metadata"""
         return 'ssl_grade' in metadata or ('checks' in metadata and 'certificate_info' in metadata.get('checks', {}))
-    
+
     def format(self, metadata: Dict[str, Any]) -> str:
         """Format SSL check metadata"""
         info = "\n[bold cyan]SSL Check Results:[/bold cyan]"
-        
+
         # SSL Grade and Score
         if 'ssl_grade' in metadata:
             grade_color = "green" if metadata['ssl_grade'] in ['A+', 'A'] else "yellow" if metadata['ssl_grade'] in ['B', 'C'] else "red"
             info += f"\n• SSL Grade: [{grade_color}]{metadata['ssl_grade']}[/{grade_color}]"
-        
+
         if 'ssl_score' in metadata:
             score_color = "green" if metadata['ssl_score'] >= 80 else "yellow" if metadata['ssl_score'] >= 60 else "red"
             info += f"\n• SSL Score: [{score_color}]{metadata['ssl_score']}/100[/{score_color}]"
-        
+
         # Certificate Information
         if 'checks' in metadata and 'certificate_info' in metadata['checks']:
             info += self._format_certificate_info(metadata['checks']['certificate_info'])
-        
+
         # Protocol Support
         if 'checks' in metadata and 'protocol_support' in metadata['checks']:
             info += self._format_protocol_support(metadata['checks']['protocol_support'])
-        
+
         # Vulnerabilities
         if 'checks' in metadata and 'vulnerabilities' in metadata['checks']:
             info += self._format_vulnerabilities(metadata['checks']['vulnerabilities'])
-        
+
         # Assessment Summary
         if 'deduction_summary' in metadata:
             info += "\n\n[bold cyan]Assessment Summary:[/bold cyan]"
             for summary in metadata['deduction_summary']:
                 info += f"\n• [dim]{summary}[/dim]"
-        
+
         return info
-    
+
     def _format_certificate_info(self, cert: Dict[str, Any]) -> str:
         """Format certificate information"""
         info = "\n\n[bold cyan]Certificate Details:[/bold cyan]"
-        
+
         if 'subject' in cert:
             info += f"\n• Subject: [white]{cert['subject']}[/white]"
         if 'issuer' in cert:
@@ -62,7 +61,7 @@ class SSLFormatter(BaseFormatter):
             info += f"\n• Key Size: [white]{cert['key_size']} bits[/white]"
         if 'signature_algorithm' in cert:
             info += f"\n• Signature Algorithm: [white]{cert['signature_algorithm']}[/white]"
-        
+
         # Certificate validation checks
         if 'cert_date_valid' in cert:
             status = "✅ Valid" if cert['cert_date_valid'] else "❌ Invalid"
@@ -73,14 +72,14 @@ class SSLFormatter(BaseFormatter):
         if 'in_trust_store' in cert:
             status = "✅ Trusted" if cert['in_trust_store'] else "❌ Not Trusted"
             info += f"\n• Trust Store: {status}"
-        
+
         return info
-    
+
     def _format_protocol_support(self, protocols: Dict[str, Any]) -> str:
         """Format protocol support information"""
         info = "\n\n[bold cyan]Protocol Support:[/bold cyan]"
         has_many_ciphers = False
-        
+
         for protocol, details in protocols.items():
             if details.get('supported'):
                 cipher_count = len(details.get('ciphers', []))
@@ -89,18 +88,18 @@ class SSLFormatter(BaseFormatter):
                     has_many_ciphers = True
             else:
                 info += f"\n• {protocol.upper().replace('_', '.')}: [red]❌ Not Supported[/red]"
-        
+
         if has_many_ciphers and not self.verbose:
             info += "\n\n[dim]💡 Cipher details not shown. Use --verbose flag for full cipher list or view at:[/dim]"
             info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
-        
+
         return info
-    
+
     def _format_vulnerabilities(self, vulns: Dict[str, Any]) -> str:
         """Format vulnerability information"""
         info = "\n\n[bold cyan]Security Vulnerabilities:[/bold cyan]"
         has_truncation = False
-        
+
         for vuln_name, vuln_data in vulns.items():
             if vuln_data.get('vulnerable'):
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [red]❌ Vulnerable[/red]"
@@ -119,9 +118,22 @@ class SSLFormatter(BaseFormatter):
                         info += f"\n  [dim]{details}[/dim]"
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
-        
+
         if has_truncation and not self.verbose:
-            info += "\n\n[dim]💡 Some details truncated. Use --verbose flag or view full results at:[/dim]"
-            info += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)[/dim]"
-        
+            result_id = vulns.get('result_id') # Assuming result_id might be available here or passed differently
+            info += self._get_truncation_notice(result_id)
+            info += "\n"
+
         return info
+
+    def _get_truncation_notice(self, result_id: str | None) -> str:
+        """Helper to get the truncation notice string"""
+        notice = "[dim]💡 Some details truncated."
+        if result_id:
+            notice += f" Use --verbose flag or view full results at:"
+            notice += f"\n[dim]   https://app.pingera.ru/checks/jobs/{result_id}"
+        else:
+            notice += " Use --verbose flag or view full results at:"
+            notice += "\n[dim]   https://app.pingera.ru (navigate to the job ID from your check execution)"
+        notice += "\n[dim]pngr checks result {result_id} --verbose[/dim]" if result_id else ""
+        return notice

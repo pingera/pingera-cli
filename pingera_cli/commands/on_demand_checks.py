@@ -730,8 +730,13 @@ class OnDemandChecksCommand(BaseCommand):
             metadata = detailed_result.check_metadata
             
             if isinstance(metadata, dict):
+                # Add result_id to metadata for formatters to use in truncation notice
+                metadata_with_id = metadata.copy()
+                if hasattr(detailed_result, 'id'):
+                    metadata_with_id['result_id'] = detailed_result.id
+                
                 registry = FormatterRegistry(verbose=self.verbose)
-                metadata_info = registry.format_metadata(metadata)
+                metadata_info = registry.format_metadata(metadata_with_id)
         
         # Combine all sections
         full_info = basic_info
