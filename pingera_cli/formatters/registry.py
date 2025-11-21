@@ -11,6 +11,7 @@ from .multistep_formatter import MultistepFormatter
 from .web_formatter import WebFormatter
 from .icmp_formatter import ICMPFormatter
 from .dns_formatter import DNSFormatter
+from .portscan_formatter import PortscanFormatter
 from .generic_formatter import GenericFormatter
 
 
@@ -26,6 +27,7 @@ class FormatterRegistry:
             WebFormatter(verbose),
             ICMPFormatter(verbose),
             DNSFormatter(verbose),
+            PortscanFormatter(verbose),
             GenericFormatter(verbose)  # Generic formatter should be last
         ]
     
