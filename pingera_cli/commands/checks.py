@@ -415,7 +415,7 @@ class ChecksCommand(BaseCommand):
             self.display_error(str(e))
             raise typer.Exit(1)
 
-    def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: int = 300, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None):
+    def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: int = 300, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, regions: Optional[str] = None):
         """Create a new monitoring check"""
         try:
             import json
@@ -528,7 +528,14 @@ class ChecksCommand(BaseCommand):
                     self.display_error(f"Failed to read Playwright script file: {str(e)}")
                     raise typer.Exit(1)
 
-            # Parse parameters JSON if provided
+            # Handle regions parameter - add to params_dict if provided and not in parameters
+            if regions is not None and parameters is None:
+                # Parse comma-separated regions into a list
+                regions_list = [r.strip() for r in regions.split(',') if r.strip()]
+                if regions_list:
+                    params_dict["regions"] = regions_list
+
+            # Parse parameters JSON if provided (this takes precedence over --regions)
             if parameters is not None:
                 try:
                     parsed_params = json.loads(parameters)
@@ -586,7 +593,7 @@ class ChecksCommand(BaseCommand):
             self.display_error(f"Failed to create check: {str(e)}")
             raise typer.Exit(1)
 
-    def update_check(self, check_id: str, name: Optional[str] = None, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: Optional[int] = None, active: Optional[bool] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None):
+    def update_check(self, check_id: str, name: Optional[str] = None, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: Optional[int] = None, active: Optional[bool] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, regions: Optional[str] = None):
         """Update an existing check"""
         try:
             import json
@@ -632,7 +639,14 @@ class ChecksCommand(BaseCommand):
                     self.display_error(f"Failed to read Playwright script file: {str(e)}")
                     raise typer.Exit(1)
 
-            # Parse parameters JSON if provided
+            # Handle regions parameter - add to params_dict if provided and not in parameters
+            if regions is not None and parameters is None:
+                # Parse comma-separated regions into a list
+                regions_list = [r.strip() for r in regions.split(',') if r.strip()]
+                if regions_list:
+                    params_dict["regions"] = regions_list
+
+            # Parse parameters JSON if provided (this takes precedence over --regions)
             if parameters is not None:
                 try:
                     parsed_params = json.loads(parameters)
@@ -1228,7 +1242,8 @@ def create_check(
     timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
-    from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration")
+    from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration"),
+    regions: Optional[str] = typer.Option(None, "--regions", help="Comma-separated list of regions (e.g., 'ru-central1,eu-west1')"),
 ):
     """Create a new monitoring check. Can be created from command line options or from a JSON/YAML file.
 
@@ -1256,7 +1271,7 @@ def create_check(
         raise typer.Exit(1)
 
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file)
+    checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file, regions)
 
 
 @app.command("update")
@@ -1270,12 +1285,13 @@ def update_check(
     timeout: Optional[int] = typer.Option(None, "--timeout", help="New timeout in seconds"),
     active: bool = typer.Option(None, "--active/--inactive", help="Enable or disable the check"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"pw_script\": \"...\", \"regions\": [\"US\", \"EU\"]}')"),
-    pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks")
+    pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
+    regions: Optional[str] = typer.Option(None, "--regions", help="Comma-separated list of regions (e.g., 'ru-central1,eu-west1')"),
 ):
     """Update an existing check. Use --parameters to provide complex parameters like Playwright scripts, regions, etc."""
     from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file)
+    checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file, regions)
 
 
 @app.command("delete")

@@ -67,7 +67,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: Optional[int] = None, name: str = "On-demand check", parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
+    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: Optional[int] = None, name: str = "On-demand check", regions: Optional[str] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
         """Execute custom on-demand check"""
         try:
             import json
@@ -189,7 +189,14 @@ class OnDemandChecksCommand(BaseCommand):
                     self.display_error(f"Failed to read Playwright script file: {str(e)}")
                     raise typer.Exit(1)
             
-            # Parse parameters JSON if provided
+            # Handle regions parameter - add to params_dict if provided and not in parameters
+            if regions is not None and parameters is None:
+                # Parse comma-separated regions into a list
+                regions_list = [r.strip() for r in regions.split(',') if r.strip()]
+                if regions_list:
+                    params_dict["regions"] = regions_list
+            
+            # Parse parameters JSON if provided (this takes precedence over --regions)
             if parameters is not None:
                 try:
                     parsed_params = json.loads(parameters)
@@ -980,6 +987,7 @@ def run_custom_check(
     port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
     timeout: Optional[int] = typer.Option(None, "--timeout", help="Timeout in seconds (optional - backend will use defaults if not specified)"),
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
+    regions: Optional[str] = typer.Option(None, "--regions", "-r", help="Comma-separated list of regions (e.g., 'ru-central1,eu-west1'). Overridden by --parameters if both are specified."),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
     from_file: Optional[str] = typer.Option(None, "--from-file", "-f", help="Path to JSON or YAML file containing check configuration"),
@@ -1003,7 +1011,7 @@ def run_custom_check(
     
     Timeout is optional - if not specified, backend will use appropriate defaults for each check type."""
     on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
-    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, parameters, pw_script_file, from_file, not no_wait)
+    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, regions, parameters, pw_script_file, from_file, not no_wait)
 
 
 @run_app.command("existing")
