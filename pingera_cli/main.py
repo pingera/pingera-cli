@@ -68,6 +68,7 @@ def ping_alias(
 def scan_alias(
     host: str = typer.Argument(..., help="Host to scan"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    ports: Optional[str] = typer.Option(None, "--ports", help="Ports to scan (e.g., '80,443' or '1-1024')"),
     no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
 ):
     """Quick port scan check"""
@@ -86,7 +87,8 @@ def scan_alias(
         parameters=None,
         pw_script_file=None,
         from_file=None,
-        wait_for_result=not no_wait
+        wait_for_result=not no_wait,
+        ports=ports
     )
 
 
@@ -146,6 +148,7 @@ def api_alias(
 def ssl_alias(
     target: str = typer.Argument(..., help="Host or URL to check SSL certificate"),
     region: Optional[str] = typer.Option(None, "--region", "-r", help="Region to execute from (e.g., ru-central1)"),
+    port: Optional[int] = typer.Option(None, "--port", "-p", help="Port number (e.g., 443)"),
     no_wait: bool = typer.Option(False, "--no-wait", help="Don't wait for result"),
 ):
     """Quick SSL certificate check"""
@@ -166,14 +169,15 @@ def ssl_alias(
         url=url,
         check_type="ssl",
         host=host,
-        port=None,
+        port=port,
         timeout=None,
         name=f"SSL check {target}",
         regions=region,
         parameters=None,
         pw_script_file=None,
         from_file=None,
-        wait_for_result=not no_wait
+        wait_for_result=not no_wait,
+        ports=None
     )
 
 

@@ -67,7 +67,7 @@ class OnDemandChecksCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: Optional[int] = None, name: str = "On-demand check", regions: Optional[str] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True):
+    def execute_custom_check(self, url: Optional[str] = None, check_type: str = "web", host: Optional[str] = None, port: Optional[int] = None, timeout: Optional[int] = None, name: str = "On-demand check", regions: Optional[str] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, wait_for_result: bool = True, ports: Optional[str] = None):
         """Execute custom on-demand check"""
         try:
             import json
@@ -196,7 +196,11 @@ class OnDemandChecksCommand(BaseCommand):
                 if regions_list:
                     params_dict["regions"] = regions_list
             
-            # Parse parameters JSON if provided (this takes precedence over --regions)
+            # Handle ports parameter - add to params_dict if provided and not in parameters
+            if ports is not None and parameters is None:
+                params_dict["ports"] = ports
+            
+            # Parse parameters JSON if provided (this takes precedence over --regions and --ports)
             if parameters is not None:
                 try:
                     parsed_params = json.loads(parameters)
@@ -984,7 +988,8 @@ def run_custom_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
     check_type: str = typer.Option("web", "--type", "-t", help=f"Check type: {', '.join(SUPPORTED_CHECK_TYPES)}"),
     host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/portscan/DNS/ICMP checks (max 255 characters)"),
-    port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
+    port: Optional[int] = typer.Option(None, "--port", "-p", help="Port number for TCP/SSL checks (1-65535)"),
+    ports: Optional[str] = typer.Option(None, "--ports", help="Ports to scan for portscan checks (e.g., '80,443' or '1-1024'). Overridden by --parameters if both are specified."),
     timeout: Optional[int] = typer.Option(None, "--timeout", help="Timeout in seconds (optional - backend will use defaults if not specified)"),
     name: str = typer.Option("On-demand check", "--name", "-n", help="Check name"),
     regions: Optional[str] = typer.Option(None, "--regions", "-r", help="Comma-separated list of regions (e.g., 'ru-central1,eu-west1'). Overridden by --parameters if both are specified."),
@@ -1005,13 +1010,13 @@ def run_custom_check(
     Parameters vary by check type:
     - web/api: --url required
     - tcp: --host required, --port optional  
-    - ssl: --url or --host required
-    - portscan: --host required
+    - ssl: --url or --host required, --port optional
+    - portscan: --host required, --ports optional
     - synthetic/multistep: --pw-script-file or --parameters with pw_script required
     
     Timeout is optional - if not specified, backend will use appropriate defaults for each check type."""
     on_demand_cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
-    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, regions, parameters, pw_script_file, from_file, not no_wait)
+    on_demand_cmd.execute_custom_check(url, check_type, host, port, timeout, name, regions, parameters, pw_script_file, from_file, not no_wait, ports)
 
 
 @run_app.command("existing")
