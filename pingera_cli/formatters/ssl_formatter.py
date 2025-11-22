@@ -115,29 +115,19 @@ class SSLFormatter(BaseFormatter):
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [red]❌ Vulnerable[/red]"
                 if 'details' in vuln_data:
                     details = vuln_data['details']
-                    # The API may return details as a string or list
-                    if isinstance(details, str):
-                        # Split by newlines and display each line
-                        lines = [line for line in details.split('\n') if line.strip()]
-                        for line in lines:
-                            info += f"\n  [dim]{line}[/dim]"
+                    # The API returns details as a list of strings
+                    if isinstance(details, list):
+                        # Display all items from the API response
+                        for item in details:
+                            info += f"\n  [dim]{item}[/dim]"
                             # Check if this line indicates server-side truncation
-                            if '... and' in line.lower() and 'more' in line.lower():
+                            if '... and' in item.lower() and 'more' in item.lower():
                                 has_truncation = True
-                    elif isinstance(details, list):
-                        if self.verbose:
-                            # Show all items in verbose mode
-                            for item in details:
-                                info += f"\n  [dim]{item}[/dim]"
-                        else:
-                            # Show first 3 items in non-verbose mode
-                            display_items = details[:3]
-                            for item in display_items:
-                                info += f"\n  [dim]{item}[/dim]"
-                            if len(details) > 3:
-                                remaining = len(details) - 3
-                                info += f"\n  [dim]... and {remaining} more item(s)[/dim]"
-                                has_truncation = True
+                    elif isinstance(details, str):
+                        # Fallback for string format (though API sends lists)
+                        info += f"\n  [dim]{details}[/dim]"
+                        if '... and' in details.lower() and 'more' in details.lower():
+                            has_truncation = True
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
 
