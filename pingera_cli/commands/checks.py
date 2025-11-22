@@ -963,7 +963,7 @@ class ChecksCommand(BaseCommand):
                 raise typer.Exit(1)
 
             result = response.results[0]
-
+            print(f"##### {response}")
             if self.output_format in ['json', 'yaml']:
                 # Full result data for JSON/YAML
                 result_data = {
