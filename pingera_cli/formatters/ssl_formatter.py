@@ -92,18 +92,38 @@ class SSLFormatter(BaseFormatter):
     def _format_protocol_support(self, protocols: Dict[str, Any]) -> tuple:
         """Format protocol support information. Returns (info, has_truncation)"""
         info = "\n\n[bold cyan]Protocol Support:[/bold cyan]"
-        has_many_ciphers = False
+        has_truncation = False
 
         for protocol, details in protocols.items():
             if details.get('supported'):
                 cipher_count = len(details.get('ciphers', []))
                 info += f"\n• {protocol.upper().replace('_', '.')}: [green]✅ Supported[/green] ({cipher_count} ciphers)"
-                if cipher_count > 10:
-                    has_many_ciphers = True
+                
+                # Show cipher details
+                cipher_details = details.get('cipher_details', [])
+                if cipher_details:
+                    if self.verbose:
+                        # Show all ciphers in verbose mode
+                        for cipher in cipher_details:
+                            cipher_name = cipher.get('openssl_name', cipher.get('name', 'Unknown'))
+                            key_size = cipher.get('key_size', 'N/A')
+                            info += f"\n  - [dim]{cipher_name} ({key_size}-bit)[/dim]"
+                    else:
+                        # Show first 3 ciphers in non-verbose mode
+                        display_count = min(3, len(cipher_details))
+                        for cipher in cipher_details[:display_count]:
+                            cipher_name = cipher.get('openssl_name', cipher.get('name', 'Unknown'))
+                            key_size = cipher.get('key_size', 'N/A')
+                            info += f"\n  - [dim]{cipher_name} ({key_size}-bit)[/dim]"
+                        
+                        if len(cipher_details) > display_count:
+                            remaining = len(cipher_details) - display_count
+                            info += f"\n  [dim]... and {remaining} more cipher(s)[/dim]"
+                            has_truncation = True
             else:
                 info += f"\n• {protocol.upper().replace('_', '.')}: [red]❌ Not Supported[/red]"
 
-        return info, has_many_ciphers
+        return info, has_truncation
 
     def _format_vulnerabilities(self, vulns: Dict[str, Any]) -> tuple:
         """Format vulnerability information. Returns (info, has_truncation)"""
