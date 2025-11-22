@@ -117,17 +117,22 @@ class SSLFormatter(BaseFormatter):
                     details = vuln_data['details']
                     # The API returns details as a list of strings
                     if isinstance(details, list):
-                        # Display all items from the API response
-                        for item in details:
-                            info += f"\n  [dim]{item}[/dim]"
-                            # Check if this line indicates server-side truncation
-                            if '... and' in item.lower() and 'more' in item.lower():
+                        if self.verbose:
+                            # Show all items in verbose mode
+                            for item in details:
+                                info += f"\n  [dim]{item}[/dim]"
+                        else:
+                            # Show only first 5 items in non-verbose mode
+                            display_items = details[:5]
+                            for item in display_items:
+                                info += f"\n  [dim]{item}[/dim]"
+                            if len(details) > 5:
+                                remaining = len(details) - 5
+                                info += f"\n  [dim]... and {remaining} more detail(s)[/dim]"
                                 has_truncation = True
                     elif isinstance(details, str):
                         # Fallback for string format (though API sends lists)
                         info += f"\n  [dim]{details}[/dim]"
-                        if '... and' in details.lower() and 'more' in details.lower():
-                            has_truncation = True
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
 
