@@ -109,6 +109,9 @@ class SSLFormatter(BaseFormatter):
         """Format vulnerability information. Returns (info, has_truncation)"""
         info = "\n\n[bold cyan]Security Vulnerabilities:[/bold cyan]"
         has_truncation = False
+        
+        # Debug: print verbose flag state
+        print(f"DEBUG: SSLFormatter.verbose = {self.verbose}")
 
         for vuln_name, vuln_data in vulns.items():
             if vuln_data.get('vulnerable'):
