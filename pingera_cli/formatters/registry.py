@@ -1,4 +1,3 @@
-
 """
 Formatter registry for managing different check result formatters
 """
@@ -17,7 +16,7 @@ from .generic_formatter import GenericFormatter
 
 class FormatterRegistry:
     """Registry for managing check result formatters"""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         self.formatters: List[BaseFormatter] = [
@@ -30,12 +29,17 @@ class FormatterRegistry:
             PortscanFormatter(verbose),
             GenericFormatter(verbose)  # Generic formatter should be last
         ]
-    
+
     def format_metadata(self, metadata: Dict[str, Any]) -> str:
         """Format metadata using the appropriate formatter"""
+        # Add result_id to metadata if not present for truncation notices
+        if 'result_id' not in metadata and isinstance(metadata, dict):
+            # result_id might be in the parent context, but we'll handle it in formatters
+            pass
+
         for formatter in self.formatters:
             if formatter.can_format(metadata):
                 return formatter.format(metadata)
-        
-        # This should never happen since GenericFormatter can handle anything
-        return "\n[bold cyan]Check Metadata:[/bold cyan]\n• [dim]No formatter available[/dim]"
+
+        # Fallback to generic formatter
+        return self.formatters[-1].format(metadata)
