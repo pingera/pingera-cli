@@ -16,7 +16,7 @@ class SSLFormatter(BaseFormatter):
     def format(self, metadata: Dict[str, Any]) -> str:
         """Format SSL check metadata"""
         info = "\n[bold cyan]SSL Check Results:[/bold cyan]"
-
+        
         # Track if we need to show truncation notice
         has_truncation = False
         result_id = metadata.get('result_id')
@@ -53,7 +53,7 @@ class SSLFormatter(BaseFormatter):
             info += "\n\n[bold cyan]Assessment Summary:[/bold cyan]"
             for summary in metadata['deduction_summary']:
                 info += f"\n• [dim]{summary}[/dim]"
-
+        
         # Show truncation notice once at the bottom if needed
         if has_truncation and not self.verbose:
             info += "\n" + self._get_truncation_notice(result_id)
@@ -109,34 +109,26 @@ class SSLFormatter(BaseFormatter):
         """Format vulnerability information. Returns (info, has_truncation)"""
         info = "\n\n[bold cyan]Security Vulnerabilities:[/bold cyan]"
         has_truncation = False
-        
-        # Debug: print verbose flag state
-        print(f"DEBUG: SSLFormatter.verbose = {self.verbose}")
 
         for vuln_name, vuln_data in vulns.items():
             if vuln_data.get('vulnerable'):
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [red]❌ Vulnerable[/red]"
                 if 'details' in vuln_data:
                     details = vuln_data['details']
-                    # The API returns details as a list of strings
                     if isinstance(details, list):
-                        if self.verbose:
-                            # Show all items in verbose mode
-                            for item in details:
-                                info += f"\n  [dim]{item}[/dim]"
-                        else:
-                            # Show only first 5 items in non-verbose mode
-                            display_items = details[:5]
-                            for item in display_items:
-                                info += f"\n  [dim]{item}[/dim]"
-                            if len(details) > 5:
-                                remaining = len(details) - 5
-                                info += f"\n  [dim]... and {remaining} more detail(s)[/dim]"
-                                has_truncation = True
-                    elif isinstance(details, str):
-                        # Fallback for string format (though API sends lists)
+                        # Show first 3 items, then indicate there are more
+                        display_items = details[:3]
+                        for item in display_items:
+                            info += f"\n  [dim]{item}[/dim]"
+                        if len(details) > 3:
+                            remaining = len(details) - 3
+                            info += f"\n  [dim]... and {remaining} more item(s)[/dim]"
+                            has_truncation = True
+                    else:
                         info += f"\n  [dim]{details}[/dim]"
             else:
                 info += f"\n• {vuln_name.replace('_', ' ').title()}: [green]✅ Not Vulnerable[/green]"
 
         return info, has_truncation
+
+    

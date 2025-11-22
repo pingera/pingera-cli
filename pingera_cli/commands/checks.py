@@ -963,7 +963,7 @@ class ChecksCommand(BaseCommand):
                 raise typer.Exit(1)
 
             result = response.results[0]
-            print(f"##### {response}")
+
             if self.output_format in ['json', 'yaml']:
                 # Full result data for JSON/YAML
                 result_data = {
@@ -1048,8 +1048,7 @@ class ChecksCommand(BaseCommand):
     def _format_metadata_by_type(self, metadata, verbose: bool = False):
         """Format metadata using the appropriate formatter"""
         from ..formatters.registry import FormatterRegistry
-        # Ensure verbose flag is passed to the registry
-        registry = FormatterRegistry(verbose=verbose)
+        registry = FormatterRegistry(verbose)
         return registry.format_metadata(metadata)
 
     def list_regions(self, check_type: Optional[str] = None):
