@@ -972,8 +972,13 @@ class OnDemandChecksCommand(BaseCommand):
 
 
 # Create Typer app for on-demand checks commands
+app = typer.Typer(name="on-demand", help="⚡ On-demand checks execution")
 run_app = typer.Typer(name="run", help="🚀 Execute checks on demand")
 jobs_app = typer.Typer(name="jobs", help="📋 Manage check jobs")
+
+# Register sub-apps
+app.add_typer(run_app)
+app.add_typer(jobs_app)
 
 
 def get_output_format():
