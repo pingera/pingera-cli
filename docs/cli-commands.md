@@ -235,6 +235,12 @@ pngr pages components update <component-id> --page-id <page-id> [--name <name>] 
 
 # Delete component
 pngr pages components delete <component-id> --page-id <page-id> [--confirm]
+
+# Get component uptime
+pngr pages components uptime <component-id> --page-id <page-id> [--start <date>] [--end <date>]
+
+# Get uptime for all components (bulk)
+pngr pages components uptime-bulk --page-id <page-id> [--start <date>] [--end <date>]
 ```
 
 ### `pngr incidents`
@@ -520,6 +526,18 @@ pngr incidents create --name "Database Issues" --body "Investigating connectivit
 
 # Update component status  
 pngr pages components update comp_123 --page-id page_123 --status degraded_performance
+
+# Get uptime for a specific component
+pngr pages components uptime comp_123 --page-id page_123
+
+# Get uptime for a specific component with date range
+pngr pages components uptime comp_123 --page-id page_123 --start 2024-01-01 --end 2024-01-31
+
+# Get uptime for all components on a page
+pngr pages components uptime-bulk --page-id page_123
+
+# Get uptime for all components with date range
+pngr pages components uptime-bulk --page-id page_123 --start 2024-01-01 --end 2024-01-31
 
 # Update check with custom parameters (Playwright script and regions)
 pngr checks update check_123 --parameters '{"pw_script": "const { test, expect } = require(\"@playwright/test\"); test(\"example\", async ({ page }) => { await page.goto(\"https://example.com\"); await expect(page).toHaveTitle(/Example/); });", "regions": ["US", "EU"]}'
