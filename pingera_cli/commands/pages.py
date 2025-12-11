@@ -217,7 +217,30 @@ class PagesCommand(BaseCommand):
             self.display_error(f"Failed to get page: {str(e)}")
             raise typer.Exit(1)
 
-    def create_page(self, name: str, subdomain: Optional[str] = None, description: Optional[str] = None, headline: Optional[str] = None, url: Optional[str] = None, public: bool = True, time_zone: Optional[str] = None):
+    def create_page(
+        self,
+        name: str,
+        subdomain: Optional[str] = None,
+        domain: Optional[str] = None,
+        description: Optional[str] = None,
+        headline: Optional[str] = None,
+        url: Optional[str] = None,
+        support_url: Optional[str] = None,
+        public: bool = True,
+        password_protected: bool = False,
+        time_zone: Optional[str] = None,
+        language: Optional[str] = None,
+        country: Optional[str] = None,
+        hidden_from_search: bool = False,
+        google_analytics_id: Optional[str] = None,
+        yandex_metrica_id: Optional[str] = None,
+        notifications_from_email: Optional[str] = None,
+        notifications_email_footer: Optional[str] = None,
+        allow_email_subscribers: bool = True,
+        allow_sms_subscribers: bool = False,
+        allow_webhook_subscribers: bool = False,
+        allow_rss_atom_feeds: bool = True,
+    ):
         """Create a new status page"""
         try:
             import json
@@ -226,20 +249,42 @@ class PagesCommand(BaseCommand):
             # Build page data
             page_data = {
                 "name": name,
-                "viewers_must_be_team_members": not public
+                "viewers_must_be_team_members": not public,
+                "password_protected": password_protected,
+                "hidden_from_search": hidden_from_search,
+                "allow_email_subscribers": allow_email_subscribers,
+                "allow_sms_subscribers": allow_sms_subscribers,
+                "allow_webhook_subscribers": allow_webhook_subscribers,
+                "allow_rss_atom_feeds": allow_rss_atom_feeds,
             }
 
             # Add optional fields
             if subdomain:
                 page_data["subdomain"] = subdomain
+            if domain:
+                page_data["domain"] = domain
             if description:
                 page_data["page_description"] = description
             if headline:
                 page_data["headline"] = headline
             if url:
                 page_data["url"] = url
+            if support_url:
+                page_data["support_url"] = support_url
             if time_zone:
                 page_data["time_zone"] = time_zone
+            if language:
+                page_data["language"] = language
+            if country:
+                page_data["country"] = country
+            if google_analytics_id:
+                page_data["google_analytics_id"] = google_analytics_id
+            if yandex_metrica_id:
+                page_data["yandex_metrica_id"] = yandex_metrica_id
+            if notifications_from_email:
+                page_data["notifications_from_email"] = notifications_from_email
+            if notifications_email_footer:
+                page_data["notifications_email_footer"] = notifications_email_footer
 
             # Create the page
             page = pages_api.v1_pages_post(page=page_data)
@@ -315,16 +360,52 @@ def get_page(
 def create_page(
     name: str = typer.Option(..., "--name", "-n", help="Page name"),
     subdomain: Optional[str] = typer.Option(None, "--subdomain", "-s", help="Subdomain (e.g., 'mycompany' for mycompany.pingera.ru)"),
+    domain: Optional[str] = typer.Option(None, "--domain", help="Custom domain"),
     description: Optional[str] = typer.Option(None, "--description", "-d", help="Page description"),
     headline: Optional[str] = typer.Option(None, "--headline", help="Page headline"),
     url: Optional[str] = typer.Option(None, "--url", "-u", help="Company URL"),
+    support_url: Optional[str] = typer.Option(None, "--support-url", help="Support/contact page URL"),
     private: bool = typer.Option(False, "--private", help="Make page private (requires team membership)"),
+    password_protected: bool = typer.Option(False, "--password-protected", help="Enable password protection"),
     time_zone: Optional[str] = typer.Option(None, "--timezone", "-t", help="Timezone (e.g., 'America/New_York')"),
+    language: Optional[str] = typer.Option(None, "--language", help="Language code (e.g., 'en', 'ru')"),
+    country: Optional[str] = typer.Option(None, "--country", help="Country"),
+    hidden_from_search: bool = typer.Option(False, "--hidden-from-search", help="Hide from search engines"),
+    google_analytics_id: Optional[str] = typer.Option(None, "--ga-id", help="Google Analytics ID"),
+    yandex_metrica_id: Optional[str] = typer.Option(None, "--ym-id", help="Yandex Metrica ID"),
+    notifications_from_email: Optional[str] = typer.Option(None, "--notifications-email", help="Notification sender email"),
+    notifications_email_footer: Optional[str] = typer.Option(None, "--email-footer", help="Email notification footer"),
+    allow_email_subscribers: bool = typer.Option(True, "--allow-email-subscribers/--no-email-subscribers", help="Allow email subscriptions"),
+    allow_sms_subscribers: bool = typer.Option(False, "--allow-sms-subscribers", help="Allow SMS subscriptions"),
+    allow_webhook_subscribers: bool = typer.Option(False, "--allow-webhook-subscribers", help="Allow webhook subscriptions"),
+    allow_rss_atom_feeds: bool = typer.Option(True, "--allow-rss/--no-rss", help="Provide RSS/Atom feeds"),
 ):
     """Create a new status page"""
     from ..utils.config import get_output_format
     pages_cmd = PagesCommand(get_output_format())
-    pages_cmd.create_page(name, subdomain, description, headline, url, not private, time_zone)
+    pages_cmd.create_page(
+        name=name,
+        subdomain=subdomain,
+        domain=domain,
+        description=description,
+        headline=headline,
+        url=url,
+        support_url=support_url,
+        public=not private,
+        password_protected=password_protected,
+        time_zone=time_zone,
+        language=language,
+        country=country,
+        hidden_from_search=hidden_from_search,
+        google_analytics_id=google_analytics_id,
+        yandex_metrica_id=yandex_metrica_id,
+        notifications_from_email=notifications_from_email,
+        notifications_email_footer=notifications_email_footer,
+        allow_email_subscribers=allow_email_subscribers,
+        allow_sms_subscribers=allow_sms_subscribers,
+        allow_webhook_subscribers=allow_webhook_subscribers,
+        allow_rss_atom_feeds=allow_rss_atom_feeds,
+    )
 
 
 @app.command("delete")
