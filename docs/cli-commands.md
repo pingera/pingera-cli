@@ -210,6 +210,9 @@ pngr pages get <page-id>
 # Create a new status page
 pngr pages create --name "My Status Page" [--subdomain <sub>] [--description <desc>] [--headline <text>] [--url <url>] [--private] [--timezone <tz>]
 
+# Update an existing status page
+pngr pages update <page-id> [--name <name>] [--subdomain <sub>] [--description <desc>] [--headline <text>] [--url <url>] [--public/--private] [--timezone <tz>]
+
 # Delete a status page
 pngr pages delete <page-id> [--confirm]
 ```
@@ -511,6 +514,15 @@ pngr checks run custom --url https://example.com --type ssl --name "SSL Certific
 
 # Execute existing check and wait for result
 pngr checks run existing check_123 --wait-for-result
+
+# Update a status page
+pngr pages update page_123 --name "Updated Name" --description "New description"
+
+# Make a page public
+pngr pages update page_123 --public
+
+# Update page timezone and language
+pngr pages update page_123 --timezone "America/New_York" --language "en"
 
 # Create an incident
 pngr incidents create --name "Database Issues" --body "Investigating connectivity" --status investigating --impact major

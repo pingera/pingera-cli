@@ -310,6 +310,109 @@ class PagesCommand(BaseCommand):
             self.display_error(f"Failed to create page: {str(e)}")
             raise typer.Exit(1)
 
+    def update_page(
+        self,
+        page_id: str,
+        name: Optional[str] = None,
+        subdomain: Optional[str] = None,
+        domain: Optional[str] = None,
+        description: Optional[str] = None,
+        headline: Optional[str] = None,
+        url: Optional[str] = None,
+        support_url: Optional[str] = None,
+        public: Optional[bool] = None,
+        password_protected: Optional[bool] = None,
+        time_zone: Optional[str] = None,
+        language: Optional[str] = None,
+        country: Optional[str] = None,
+        hidden_from_search: Optional[bool] = None,
+        google_analytics_id: Optional[str] = None,
+        yandex_metrica_id: Optional[str] = None,
+        notifications_from_email: Optional[str] = None,
+        notifications_email_footer: Optional[str] = None,
+        allow_email_subscribers: Optional[bool] = None,
+        allow_sms_subscribers: Optional[bool] = None,
+        allow_webhook_subscribers: Optional[bool] = None,
+        allow_rss_atom_feeds: Optional[bool] = None,
+    ):
+        """Update an existing status page"""
+        try:
+            pages_api = self.get_client()
+
+            # Build page data with only provided fields
+            page_data = {}
+
+            if name is not None:
+                page_data["name"] = name
+            if public is not None:
+                page_data["viewers_must_be_team_members"] = not public
+            if password_protected is not None:
+                page_data["password_protected"] = password_protected
+            if hidden_from_search is not None:
+                page_data["hidden_from_search"] = hidden_from_search
+            if allow_email_subscribers is not None:
+                page_data["allow_email_subscribers"] = allow_email_subscribers
+            if allow_sms_subscribers is not None:
+                page_data["allow_sms_subscribers"] = allow_sms_subscribers
+            if allow_webhook_subscribers is not None:
+                page_data["allow_webhook_subscribers"] = allow_webhook_subscribers
+            if allow_rss_atom_feeds is not None:
+                page_data["allow_rss_atom_feeds"] = allow_rss_atom_feeds
+
+            # Add optional fields only if provided
+            if subdomain is not None:
+                page_data["subdomain"] = subdomain
+            if domain is not None:
+                page_data["domain"] = domain
+            if description is not None:
+                page_data["page_description"] = description
+            if headline is not None:
+                page_data["headline"] = headline
+            if url is not None:
+                page_data["url"] = url
+            if support_url is not None:
+                page_data["support_url"] = support_url
+            if time_zone is not None:
+                page_data["time_zone"] = time_zone
+            if language is not None:
+                page_data["language"] = language
+            if country is not None:
+                page_data["country"] = country
+            if google_analytics_id is not None:
+                page_data["google_analytics_id"] = google_analytics_id
+            if yandex_metrica_id is not None:
+                page_data["yandex_metrica_id"] = yandex_metrica_id
+            if notifications_from_email is not None:
+                page_data["notifications_from_email"] = notifications_from_email
+            if notifications_email_footer is not None:
+                page_data["notifications_email_footer"] = notifications_email_footer
+
+            if not page_data:
+                self.display_error("No fields provided to update")
+                raise typer.Exit(1)
+
+            # Update the page
+            page = pages_api.v1_pages_page_id_patch(page_id=page_id, page=page_data)
+
+            # Build success message
+            updated_fields = []
+            if name is not None:
+                updated_fields.append(f"Name: {name}")
+            if subdomain is not None:
+                updated_fields.append(f"Subdomain: {subdomain}")
+            if public is not None:
+                updated_fields.append(f"Visibility: {'Public' if public else 'Private'}")
+
+            self.display_success(
+                f"Status page '{page_id}' updated successfully!\n" + 
+                (("\n".join(updated_fields)) if updated_fields else "Fields updated"),
+                "✅ Page Updated"
+            )
+
+        except Exception as e:
+            self.display_error(f"Failed to update page: {str(e)}")
+            raise typer.Exit(1)
+
     def delete_page(self, page_id: str, confirm: bool = False):
         """Delete a status page"""
         try:
@@ -392,6 +495,60 @@ def create_page(
         url=url,
         support_url=support_url,
         public=not private,
+        password_protected=password_protected,
+        time_zone=time_zone,
+        language=language,
+        country=country,
+        hidden_from_search=hidden_from_search,
+        google_analytics_id=google_analytics_id,
+        yandex_metrica_id=yandex_metrica_id,
+        notifications_from_email=notifications_from_email,
+        notifications_email_footer=notifications_email_footer,
+        allow_email_subscribers=allow_email_subscribers,
+        allow_sms_subscribers=allow_sms_subscribers,
+        allow_webhook_subscribers=allow_webhook_subscribers,
+        allow_rss_atom_feeds=allow_rss_atom_feeds,
+    )
+
+
+@app.command("update")
+def update_page(
+    page_id: str = typer.Argument(..., help="Page ID to update"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Page name"),
+    subdomain: Optional[str] = typer.Option(None, "--subdomain", "-s", help="Subdomain (e.g., 'mycompany' for mycompany.pingera.ru)"),
+    domain: Optional[str] = typer.Option(None, "--domain", help="Custom domain"),
+    description: Optional[str] = typer.Option(None, "--description", "-d", help="Page description"),
+    headline: Optional[str] = typer.Option(None, "--headline", help="Page headline"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="Company URL"),
+    support_url: Optional[str] = typer.Option(None, "--support-url", help="Support/contact page URL"),
+    public: Optional[bool] = typer.Option(None, "--public/--private", help="Make page public or private"),
+    password_protected: Optional[bool] = typer.Option(None, "--password-protected/--no-password", help="Enable/disable password protection"),
+    time_zone: Optional[str] = typer.Option(None, "--timezone", "-t", help="Timezone (e.g., 'America/New_York')"),
+    language: Optional[str] = typer.Option(None, "--language", help="Language code (e.g., 'en', 'ru')"),
+    country: Optional[str] = typer.Option(None, "--country", help="Country"),
+    hidden_from_search: Optional[bool] = typer.Option(None, "--hidden-from-search/--visible-in-search", help="Hide/show in search engines"),
+    google_analytics_id: Optional[str] = typer.Option(None, "--ga-id", help="Google Analytics ID"),
+    yandex_metrica_id: Optional[str] = typer.Option(None, "--ym-id", help="Yandex Metrica ID"),
+    notifications_from_email: Optional[str] = typer.Option(None, "--notifications-email", help="Notification sender email"),
+    notifications_email_footer: Optional[str] = typer.Option(None, "--email-footer", help="Email notification footer"),
+    allow_email_subscribers: Optional[bool] = typer.Option(None, "--allow-email-subscribers/--no-email-subscribers", help="Allow/disallow email subscriptions"),
+    allow_sms_subscribers: Optional[bool] = typer.Option(None, "--allow-sms-subscribers/--no-sms-subscribers", help="Allow/disallow SMS subscriptions"),
+    allow_webhook_subscribers: Optional[bool] = typer.Option(None, "--allow-webhook-subscribers/--no-webhook-subscribers", help="Allow/disallow webhook subscriptions"),
+    allow_rss_atom_feeds: Optional[bool] = typer.Option(None, "--allow-rss/--no-rss", help="Provide/disable RSS/Atom feeds"),
+):
+    """Update an existing status page"""
+    from ..utils.config import get_output_format
+    pages_cmd = PagesCommand(get_output_format())
+    pages_cmd.update_page(
+        page_id=page_id,
+        name=name,
+        subdomain=subdomain,
+        domain=domain,
+        description=description,
+        headline=headline,
+        url=url,
+        support_url=support_url,
+        public=public,
         password_protected=password_protected,
         time_zone=time_zone,
         language=language,
