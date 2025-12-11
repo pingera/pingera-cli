@@ -221,29 +221,20 @@ pngr pages delete <page-id> [--confirm]
 Manage status page components.
 
 ```bash
-# List components
-pngr components list [--page-id <id>] [--page <num>] [--page-size <size>]
+# List components for a page
+pngr components list --page-id <page-id>
 
 # Get specific component
-pngr components get <component-id> [--page-id <id>]
+pngr components get <component-id> --page-id <page-id>
 
 # Create component
-pngr components create --name <name> [--description <desc>] [--status <status>] [--page-id <id>]
+pngr components create --name <name> --page-id <page-id> [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase] [--only-if-degraded] [--start-date <YYYY-MM-DD>]
 
 # Update component
-pngr components update <component-id> --name <name> --description <desc> --page-id <id>
+pngr components update <component-id> --page-id <page-id> [--name <name>] [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase/--no-showcase] [--only-if-degraded/--always-show]
 
 # Delete component
-pngr components delete <component-id> [--page-id <id>] [--confirm]
-
-# Update component status
-pngr components status <component-id> --status <status> [--page-id <id>]
-
-# Get component uptime
-pngr components uptime <component-id> [--page-id <id>] [--from <date>] [--to <date>]
-
-# Bulk update component uptime
-pngr components uptime-bulk --file <json-file> [--page-id <id>]
+pngr components delete <component-id> --page-id <page-id> [--confirm]
 ```
 
 ### `pngr incidents`

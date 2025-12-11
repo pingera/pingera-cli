@@ -16,6 +16,9 @@ from .commands.base import BaseCommand
 from .commands.auth import auth_cmd
 from .commands.checks import app as checks_app
 from .commands.secrets import app as secrets_app
+from .commands.pages import app as pages_app
+from .commands import components
+from .commands.on_demand_checks import app as on_demand_app
 from .utils.console import console, error_console
 from .utils.config import get_config
 
@@ -31,14 +34,12 @@ app = typer.Typer(
 # Initialize base command handler
 base_cmd = BaseCommand()
 
-# Add subcommands
+# Register command groups
 app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(checks_app, name="checks")
 app.add_typer(secrets_app, name="secrets")
-
-# Import pages commands
-from .commands.pages import app as pages_app
 app.add_typer(pages_app, name="pages")
+app.add_typer(components.app, name="components")
 
 
 # Quick command aliases (separate help section)
@@ -51,7 +52,7 @@ def ping_alias(
     """Quick ICMP ping check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=None,
@@ -78,7 +79,7 @@ def scan_alias(
     """Quick port scan check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=None,
@@ -105,7 +106,7 @@ def web_alias(
     """Quick web check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=url,
@@ -131,7 +132,7 @@ def api_alias(
     """Quick API check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=url,
@@ -158,9 +159,9 @@ def ssl_alias(
     """Quick SSL certificate check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
-    
+
     # Detect if target is a URL or hostname
     if target.startswith('http://') or target.startswith('https://'):
         url = target
@@ -168,7 +169,7 @@ def ssl_alias(
     else:
         url = None
         host = target
-    
+
     cmd.execute_custom_check(
         url=url,
         check_type="ssl",
@@ -194,7 +195,7 @@ def dns_alias(
     """Quick DNS check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=None,
@@ -220,7 +221,7 @@ def synthetic_alias(
     """Quick synthetic check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=None,
@@ -246,7 +247,7 @@ def multistep_alias(
     """Quick multistep check"""
     from .commands.on_demand_checks import OnDemandChecksCommand
     from .utils.config import get_output_format, get_verbose_mode
-    
+
     cmd = OnDemandChecksCommand(get_output_format(), verbose=get_verbose_mode())
     cmd.execute_custom_check(
         url=None,
@@ -340,7 +341,7 @@ def config(
     Manage pngr configuration
     """
     from .utils.config import set_output_format as save_output_format, get_config, save_config
-    
+
     if set_api_key:
         # In a real implementation, this would save to a config file
         console.print(f"[yellow]Note:[/yellow] Set environment variable PINGERA_API_KEY={set_api_key}")
@@ -406,10 +407,10 @@ def main(
 ):
     """
     🚀 pngr - a nice CLI for Pingera platform
-    
+
     Monitor your services, APIs, and websites with powerful uptime monitoring.
     Manage checks, view results, and get insights right from your terminal.
-    
+
     🌐 Web Dashboard: https://app.pingera.ru
     📚 Documentation: https://docs.pingera.ru
     💡 Create an account at https://app.pingera.ru to get started with monitoring and get an API key
@@ -427,7 +428,7 @@ def main(
 
     if verbose:
         console.print("[dim]Verbose mode enabled[/dim]")
-    
+
     # Store current output format and verbose mode in config temporarily for subcommands
     from .utils.config import set_output_format as save_output_format, set_verbose_mode
     save_output_format(output)
