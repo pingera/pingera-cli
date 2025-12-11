@@ -217,24 +217,24 @@ pngr pages update <page-id> [--name <name>] [--subdomain <sub>] [--description <
 pngr pages delete <page-id> [--confirm]
 ```
 
-### `pngr components`
-Manage status page components.
+### `pngr pages components`
+Manage status page components (nested under pages).
 
 ```bash
 # List components for a page
-pngr components list --page-id <page-id>
+pngr pages components list --page-id <page-id>
 
 # Get specific component
-pngr components get <component-id> --page-id <page-id>
+pngr pages components get <component-id> --page-id <page-id>
 
 # Create component
-pngr components create --name <name> --page-id <page-id> [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase] [--only-if-degraded] [--start-date <YYYY-MM-DD>]
+pngr pages components create --name <name> --page-id <page-id> [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase] [--only-if-degraded] [--start-date <YYYY-MM-DD>]
 
 # Update component
-pngr components update <component-id> --page-id <page-id> [--name <name>] [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase/--no-showcase] [--only-if-degraded/--always-show]
+pngr pages components update <component-id> --page-id <page-id> [--name <name>] [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase/--no-showcase] [--only-if-degraded/--always-show]
 
 # Delete component
-pngr components delete <component-id> --page-id <page-id> [--confirm]
+pngr pages components delete <component-id> --page-id <page-id> [--confirm]
 ```
 
 ### `pngr incidents`
@@ -519,7 +519,7 @@ pngr pages update page_123 --timezone "America/New_York" --language "en"
 pngr incidents create --name "Database Issues" --body "Investigating connectivity" --status investigating --impact major
 
 # Update component status  
-pngr components status comp_123 --status degraded_performance
+pngr pages components update comp_123 --page-id page_123 --status degraded_performance
 
 # Update check with custom parameters (Playwright script and regions)
 pngr checks update check_123 --parameters '{"pw_script": "const { test, expect } = require(\"@playwright/test\"); test(\"example\", async ({ page }) => { await page.goto(\"https://example.com\"); await expect(page).toHaveTitle(/Example/); });", "regions": ["US", "EU"]}'

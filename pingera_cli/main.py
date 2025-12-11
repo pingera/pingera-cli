@@ -17,7 +17,6 @@ from .commands.auth import auth_cmd
 from .commands.checks import app as checks_app
 from .commands.secrets import app as secrets_app
 from .commands.pages import app as pages_app
-from .commands import components
 from .commands.on_demand_checks import app as on_demand_app
 from .utils.console import console, error_console
 from .utils.config import get_config
@@ -39,7 +38,6 @@ app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(checks_app, name="checks")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(pages_app, name="pages")
-app.add_typer(components.app, name="components")
 
 
 # Quick command aliases (separate help section)
