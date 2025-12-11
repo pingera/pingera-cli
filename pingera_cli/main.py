@@ -36,6 +36,10 @@ app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(checks_app, name="checks")
 app.add_typer(secrets_app, name="secrets")
 
+# Import pages commands
+from .commands.pages import app as pages_app
+app.add_typer(pages_app, name="pages")
+
 
 # Quick command aliases (separate help section)
 @app.command("ping", rich_help_panel="🚀 Quick Commands")

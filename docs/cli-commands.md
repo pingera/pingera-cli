@@ -195,7 +195,7 @@ pngr heartbeats ping <heartbeat-id>
 pngr heartbeats logs <heartbeat-id> [--from <date>] [--to <date>] [--page <num>]
 ```
 
-## Status Pages Commands (soon)
+## Status Pages Commands
 
 ### `pngr pages`
 Manage status pages.
@@ -207,13 +207,10 @@ pngr pages list [--page <num>] [--page-size <size>]
 # Get specific status page
 pngr pages get <page-id>
 
-# Create status page
-pngr pages create --name <name> [--description <desc>] [--subdomain <sub>] [--theme <theme>]
+# Create a new status page
+pngr pages create --name "My Status Page" [--subdomain <sub>] [--description <desc>] [--headline <text>] [--url <url>] [--private] [--timezone <tz>]
 
-# Update status page
-pngr pages update <page-id> --name <name> --description <desc> --theme <theme>
-
-# Delete status page
+# Delete a status page
 pngr pages delete <page-id> [--confirm]
 ```
 
