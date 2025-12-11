@@ -20,8 +20,9 @@ class ComponentsCommand(BaseCommand):
     Commands for managing status page components
     """
 
-    def __init__(self, output_format: Optional[str] = None):
+    def __init__(self, output_format: Optional[str] = None, verbose: bool = False):
         super().__init__(output_format)
+        self.verbose = verbose
 
     def get_client(self):
         """Get Pingera SDK client with authentication"""
@@ -332,22 +333,27 @@ class ComponentsCommand(BaseCommand):
                 **params
             )
 
+            # Check if we got valid data
+            if uptime_data is None:
+                self.display_error("No uptime data returned from API")
+                raise typer.Exit(1)
+
             # Prepare data for different output formats
             if self.output_format in ['json', 'yaml']:
                 uptime_dict = {
                     "component_id": component_id,
                     "page_id": page_id,
-                    "uptime_percentage": uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') else None,
-                    "total_time": uptime_data.total_time if hasattr(uptime_data, 'total_time') else None,
-                    "downtime": uptime_data.downtime if hasattr(uptime_data, 'downtime') else None,
-                    "incidents_count": uptime_data.incidents_count if hasattr(uptime_data, 'incidents_count') else None,
+                    "uptime_percentage": uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') and uptime_data.uptime_percentage is not None else None,
+                    "total_time": uptime_data.total_time if hasattr(uptime_data, 'total_time') and uptime_data.total_time is not None else None,
+                    "downtime": uptime_data.downtime if hasattr(uptime_data, 'downtime') and uptime_data.downtime is not None else None,
+                    "incidents_count": uptime_data.incidents_count if hasattr(uptime_data, 'incidents_count') and uptime_data.incidents_count is not None else None,
                     "start_date": start,
                     "end_date": end,
                 }
                 self.output_data(uptime_dict)
             else:
                 # Rich formatted output
-                uptime_pct = uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') else 0
+                uptime_pct = uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') and uptime_data.uptime_percentage is not None else 0
                 
                 # Color code based on uptime percentage
                 if uptime_pct >= 99.9:
@@ -389,18 +395,56 @@ class ComponentsCommand(BaseCommand):
         try:
             components_api = self.get_client()
             
-            # Build parameters
+            # First, get all components for this page
+            components = components_api.v1_pages_page_id_components_get(page_id=page_id)
+            
+            if not components:
+                if self.output_format in ['json', 'yaml']:
+                    self.output_data({"components": [], "total": 0, "message": "No components found"})
+                else:
+                    self.display_info("No components found on this page.")
+                return
+            
+            # Build parameters for uptime requests
             params = {}
             if start:
                 params['start'] = start
             if end:
                 params['end'] = end
             
-            # Make API call
-            bulk_uptime = components_api.v1_pages_page_id_components_uptime_get(
-                page_id=page_id,
-                **params
-            )
+            # Fetch uptime data for each component
+            bulk_uptime = []
+            for component in components:
+                component_id = str(component.id) if hasattr(component, 'id') and component.id else None
+                if not component_id:
+                    continue
+                    
+                try:
+                    uptime_data = components_api.v1_pages_page_id_components_component_id_uptime_get(
+                        page_id=page_id,
+                        component_id=component_id,
+                        **params
+                    )
+                    
+                    if uptime_data:
+                        # Create a combined object with component info and uptime data
+                        class ComponentUptime:
+                            pass
+                        
+                        comp_uptime = ComponentUptime()
+                        comp_uptime.component_id = component_id
+                        comp_uptime.component_name = component.name if hasattr(component, 'name') else None
+                        comp_uptime.uptime_percentage = uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') else None
+                        comp_uptime.total_time = uptime_data.total_time if hasattr(uptime_data, 'total_time') else None
+                        comp_uptime.downtime = uptime_data.downtime if hasattr(uptime_data, 'downtime') else None
+                        comp_uptime.incidents_count = uptime_data.incidents_count if hasattr(uptime_data, 'incidents_count') else None
+                        
+                        bulk_uptime.append(comp_uptime)
+                except Exception as e:
+                    # Skip components that fail to fetch uptime
+                    if self.verbose:
+                        self.console.print(f"[dim yellow]Warning: Could not fetch uptime for component {component_id}: {str(e)}[/dim yellow]")
+                    continue
 
             if not bulk_uptime:
                 if self.output_format in ['json', 'yaml']:
@@ -579,8 +623,8 @@ def get_component_uptime(
     end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD or ISO 8601)"),
 ):
     """Get uptime data for a specific component"""
-    from ..utils.config import get_output_format
-    components_cmd = ComponentsCommand(get_output_format())
+    from ..utils.config import get_output_format, get_verbose_mode
+    components_cmd = ComponentsCommand(get_output_format(), verbose=get_verbose_mode())
     components_cmd.get_component_uptime(page_id, component_id, start, end)
 
 
@@ -591,6 +635,6 @@ def get_bulk_uptime(
     end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD or ISO 8601)"),
 ):
     """Get uptime data for all components on a page"""
-    from ..utils.config import get_output_format
-    components_cmd = ComponentsCommand(get_output_format())
+    from ..utils.config import get_output_format, get_verbose_mode
+    components_cmd = ComponentsCommand(get_output_format(), verbose=get_verbose_mode())
     components_cmd.get_bulk_uptime(page_id, start, end)
