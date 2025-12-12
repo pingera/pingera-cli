@@ -51,8 +51,14 @@ class IncidentsCommand(BaseCommand):
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
 
-    def list_incidents(self, page_id: str, component_id: Optional[str] = None):
-        """List incidents for a status page"""
+    def list_incidents(
+        self,
+        page_id: str,
+        component_id: Optional[str] = None,
+        unresolved: bool = False,
+        maintenance: bool = False,
+    ):
+        """List incidents for a status page with optional filters"""
         try:
             incidents_api = self.get_client()
             
@@ -62,6 +68,20 @@ class IncidentsCommand(BaseCommand):
                 params['component_id'] = component_id
             
             response = incidents_api.v1_pages_page_id_incidents_get(page_id=page_id, **params)
+            
+            # Apply client-side filters
+            if response and (unresolved or maintenance):
+                filtered_incidents = []
+                for incident in response:
+                    if unresolved:
+                        # Filter for unresolved incidents (not resolved)
+                        if hasattr(incident, 'status') and incident.status and incident.status != 'resolved':
+                            filtered_incidents.append(incident)
+                    elif maintenance:
+                        # Filter for scheduled maintenance
+                        if hasattr(incident, 'scheduled_for') and incident.scheduled_for:
+                            filtered_incidents.append(incident)
+                response = filtered_incidents
 
             if not response:
                 if self.output_format in ['json', 'yaml']:
@@ -428,11 +448,13 @@ app = typer.Typer(name="incidents", help="🚨 Manage status page incidents", no
 def list_incidents(
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     component_id: Optional[str] = typer.Option(None, "--component-id", "-c", help="Filter by component ID"),
+    unresolved: bool = typer.Option(False, "--unresolved", "-u", help="Show only unresolved incidents"),
+    maintenance: bool = typer.Option(False, "--maintenance", "-m", help="Show only scheduled maintenance"),
 ):
     """List incidents for a status page"""
     from ..utils.config import get_output_format
     incidents_cmd = IncidentsCommand(get_output_format())
-    incidents_cmd.list_incidents(page_id, component_id)
+    incidents_cmd.list_incidents(page_id, component_id, unresolved, maintenance)
 
 
 @app.command("get")
@@ -531,3 +553,26 @@ def delete_incident(
     from ..utils.config import get_output_format
     incidents_cmd = IncidentsCommand(get_output_format())
     incidents_cmd.delete_incident(page_id, incident_id, confirm)
+
+
+
+@app.command("unresolved")
+def list_unresolved_incidents(
+    page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
+    component_id: Optional[str] = typer.Option(None, "--component-id", "-c", help="Filter by component ID"),
+):
+    """List unresolved incidents (not resolved)"""
+    from ..utils.config import get_output_format
+    incidents_cmd = IncidentsCommand(get_output_format())
+    incidents_cmd.list_incidents(page_id, component_id, unresolved=True)
+
+
+@app.command("maintenance")
+def list_maintenance_windows(
+    page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
+    component_id: Optional[str] = typer.Option(None, "--component-id", "-c", help="Filter by component ID"),
+):
+    """List scheduled maintenance windows"""
+    from ..utils.config import get_output_format
+    incidents_cmd = IncidentsCommand(get_output_format())
+    incidents_cmd.list_incidents(page_id, component_id, maintenance=True)
