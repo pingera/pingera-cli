@@ -300,6 +300,7 @@ class IncidentsCommand(BaseCommand):
         status: str,
         body: Optional[str] = None,
         impact: Optional[str] = None,
+        components: Optional[dict] = None,
         deliver_notifications: bool = True,
     ):
         """Create a new incident"""
@@ -318,6 +319,8 @@ class IncidentsCommand(BaseCommand):
                 incident_data["body"] = body
             if impact:
                 incident_data["impact"] = impact
+            if components:
+                incident_data["components"] = components
 
             # Create the incident
             incident = incidents_api.v1_pages_page_id_incidents_post(
@@ -332,6 +335,9 @@ class IncidentsCommand(BaseCommand):
                 f"Status: {status}",
                 f"Impact: {impact or 'none'}"
             ]
+            
+            if components:
+                success_details.append(f"Affected components: {len(components)}")
 
             self.display_success(
                 f"Incident '{name}' created successfully!\n" + "\n".join(success_details),
@@ -445,10 +451,24 @@ def create_incident(
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Incident description/body"),
     impact: Optional[str] = typer.Option(None, "--impact", "-i", help="Impact level (none, minor, major, critical)"),
+    components: Optional[str] = typer.Option(None, "--components", "-c", help="Components as JSON (e.g., '{\"component_id\":\"status\"}'). Valid statuses: operational, degraded_performance, partial_outage, major_outage, under_maintenance"),
     no_notifications: bool = typer.Option(False, "--no-notifications", help="Don't send notifications"),
 ):
     """Create a new incident"""
+    import json
     from ..utils.config import get_output_format
+    
+    # Parse components if provided
+    components_dict = None
+    if components:
+        try:
+            components_dict = json.loads(components)
+        except json.JSONDecodeError as e:
+            from rich.console import Console
+            console = Console()
+            console.print(f"[red]Error parsing components JSON: {e}[/red]")
+            raise typer.Exit(1)
+    
     incidents_cmd = IncidentsCommand(get_output_format())
     incidents_cmd.create_incident(
         page_id=page_id,
@@ -456,6 +476,7 @@ def create_incident(
         status=status,
         body=body,
         impact=impact,
+        components=components_dict,
         deliver_notifications=not no_notifications,
     )
 
