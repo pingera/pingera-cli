@@ -356,6 +356,7 @@ class IncidentsCommand(BaseCommand):
         status: Optional[str] = None,
         body: Optional[str] = None,
         impact: Optional[str] = None,
+        components: Optional[dict] = None,
     ):
         """Update an existing incident"""
         try:
@@ -372,6 +373,8 @@ class IncidentsCommand(BaseCommand):
                 incident_data["body"] = body
             if impact is not None:
                 incident_data["impact"] = impact
+            if components is not None:
+                incident_data["components"] = components
 
             if not incident_data:
                 self.display_error("No fields provided to update")
@@ -489,9 +492,23 @@ def update_incident(
     status: Optional[str] = typer.Option(None, "--status", "-s", help="Incident status"),
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Incident description/body"),
     impact: Optional[str] = typer.Option(None, "--impact", "-i", help="Impact level"),
+    components: Optional[str] = typer.Option(None, "--components", "-c", help="Components as JSON (e.g., '{\"component_id\":\"status\"}'). Valid statuses: operational, degraded_performance, partial_outage, major_outage, under_maintenance"),
 ):
     """Update an existing incident"""
+    import json
     from ..utils.config import get_output_format
+    
+    # Parse components if provided
+    components_dict = None
+    if components:
+        try:
+            components_dict = json.loads(components)
+        except json.JSONDecodeError as e:
+            from rich.console import Console
+            console = Console()
+            console.print(f"[red]Error parsing components JSON: {e}[/red]")
+            raise typer.Exit(1)
+    
     incidents_cmd = IncidentsCommand(get_output_format())
     incidents_cmd.update_incident(
         page_id=page_id,
@@ -500,6 +517,7 @@ def update_incident(
         status=status,
         body=body,
         impact=impact,
+        components=components_dict,
     )
 
 
