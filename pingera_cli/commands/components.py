@@ -531,8 +531,9 @@ def get_component_uptime(
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     start: Optional[str] = typer.Option(None, "--start", help="Start date (YYYY-MM-DD or ISO 8601)"),
     end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD or ISO 8601)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information including event IDs"),
 ):
     """Get uptime data for a specific component"""
-    from ..utils.config import get_output_format, get_verbose_mode
-    components_cmd = ComponentsCommand(get_output_format(), verbose=get_verbose_mode())
+    from ..utils.config import get_output_format
+    components_cmd = ComponentsCommand(get_output_format(), verbose=verbose)
     components_cmd.get_component_uptime(page_id, component_id, start, end)
