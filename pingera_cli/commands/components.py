@@ -333,6 +333,8 @@ class ComponentsCommand(BaseCommand):
                 **params
             )
 
+            print(f"##### {uptime_data}")
+
             # Check if we got valid data
             if uptime_data is None:
                 self.display_error("No uptime data returned from API")
