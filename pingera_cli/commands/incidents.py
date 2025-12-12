@@ -132,6 +132,38 @@ class IncidentsCommand(BaseCommand):
 
             # Prepare data for different output formats
             if self.output_format in ['json', 'yaml']:
+                # Parse incident_updates
+                incident_updates_data = []
+                if hasattr(incident, 'incident_updates') and incident.incident_updates:
+                    for update in incident.incident_updates:
+                        if isinstance(update, dict):
+                            incident_updates_data.append(update)
+                        else:
+                            update_dict = {
+                                "id": getattr(update, 'id', None),
+                                "body": getattr(update, 'body', None),
+                                "status": getattr(update, 'status', None),
+                                "created_at": getattr(update, 'created_at', None),
+                                "components": getattr(update, 'components', None),
+                                "deliver_notifications": getattr(update, 'deliver_notifications', None),
+                            }
+                            incident_updates_data.append(update_dict)
+
+                # Parse components
+                components_data = []
+                if hasattr(incident, 'components') and incident.components:
+                    for comp in incident.components:
+                        if isinstance(comp, dict):
+                            components_data.append(comp)
+                        else:
+                            comp_dict = {
+                                "id": getattr(comp, 'id', None),
+                                "name": getattr(comp, 'name', None),
+                                "status": getattr(comp, 'status', None),
+                                "description": getattr(comp, 'description', None),
+                            }
+                            components_data.append(comp_dict)
+
                 incident_data = {
                     "id": str(incident.id) if hasattr(incident, 'id') and incident.id else None,
                     "name": incident.name if hasattr(incident, 'name') and incident.name else None,
@@ -143,6 +175,10 @@ class IncidentsCommand(BaseCommand):
                     "updated_at": incident.updated_at.isoformat() if hasattr(incident, 'updated_at') and incident.updated_at else None,
                     "resolved_at": incident.resolved_at if hasattr(incident, 'resolved_at') and incident.resolved_at else None,
                     "monitoring_at": incident.monitoring_at.isoformat() if hasattr(incident, 'monitoring_at') and incident.monitoring_at else None,
+                    "incident_updates": incident_updates_data,
+                    "components": components_data,
+                    "postmortem_body": incident.postmortem_body if hasattr(incident, 'postmortem_body') and incident.postmortem_body else None,
+                    "postmortem_published_at": incident.postmortem_published_at if hasattr(incident, 'postmortem_published_at') and incident.postmortem_published_at else None,
                 }
                 self.output_data(incident_data)
             else:
@@ -151,15 +187,83 @@ class IncidentsCommand(BaseCommand):
 • ID: [white]{incident.id}[/white]
 • Name: [white]{incident.name}[/white]
 • Status: [white]{incident.status if hasattr(incident, 'status') and incident.status else 'Not set'}[/white]
-• Impact: [white]{incident.impact if hasattr(incident, 'impact') and incident.impact else 'Not set'}[/white]"""
+• Impact: [white]{incident.impact if hasattr(incident, 'impact') and incident.impact else 'Not set'}[/white]
+• Page ID: [white]{incident.page_id if hasattr(incident, 'page_id') and incident.page_id else 'Unknown'}[/white]"""
 
-                description_info = ""
-                if hasattr(incident, 'body') and incident.body:
-                    description_info = f"""
+                # Affected Components
+                components_info = ""
+                if hasattr(incident, 'components') and incident.components:
+                    components_info = f"""
 
-[bold cyan]Description:[/bold cyan]
-[white]{incident.body}[/white]"""
+[bold cyan]Affected Components ({len(incident.components)}):[/bold cyan]"""
+                    for comp in incident.components:
+                        if isinstance(comp, dict):
+                            comp_name = comp.get('name', 'Unknown')
+                            comp_status = comp.get('status', 'unknown')
+                            comp_id = comp.get('id', '')
+                        else:
+                            comp_name = getattr(comp, 'name', 'Unknown')
+                            comp_status = getattr(comp, 'status', 'unknown')
+                            comp_id = getattr(comp, 'id', '')
+                        
+                        status_color = {
+                            'operational': 'green',
+                            'degraded_performance': 'yellow',
+                            'partial_outage': 'yellow',
+                            'major_outage': 'red',
+                            'under_maintenance': 'blue'
+                        }.get(comp_status, 'white')
+                        
+                        if self.verbose:
+                            components_info += f"\n• [{status_color}]{comp_name}[/{status_color}] - {comp_status} (ID: {comp_id})"
+                        else:
+                            components_info += f"\n• [{status_color}]{comp_name}[/{status_color}] - {comp_status}"
 
+                # Incident Updates
+                updates_info = ""
+                if hasattr(incident, 'incident_updates') and incident.incident_updates:
+                    updates_info = f"""
+
+[bold cyan]Incident Updates ({len(incident.incident_updates)}):[/bold cyan]"""
+                    for i, update in enumerate(incident.incident_updates, 1):
+                        if isinstance(update, dict):
+                            update_body = update.get('body', '')
+                            update_status = update.get('status', 'unknown')
+                            update_created = update.get('created_at', '')
+                            update_id = update.get('id', '')
+                        else:
+                            update_body = getattr(update, 'body', '')
+                            update_status = getattr(update, 'status', 'unknown')
+                            update_created = getattr(update, 'created_at', '')
+                            update_id = getattr(update, 'id', '')
+                        
+                        # Format timestamp
+                        try:
+                            if isinstance(update_created, str):
+                                from dateutil import parser
+                                dt = parser.parse(update_created)
+                                time_str = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+                            else:
+                                time_str = str(update_created)
+                        except:
+                            time_str = str(update_created)
+                        
+                        updates_info += f"\n\n[bold]Update #{i}[/bold] - [yellow]{update_status}[/yellow] at [dim]{time_str}[/dim]"
+                        if self.verbose:
+                            updates_info += f"\n[dim]ID: {update_id}[/dim]"
+                        updates_info += f"\n{update_body}"
+
+                # Postmortem
+                postmortem_info = ""
+                if hasattr(incident, 'postmortem_body') and incident.postmortem_body:
+                    postmortem_info = f"""
+
+[bold cyan]Postmortem:[/bold cyan]
+{incident.postmortem_body}"""
+                    if hasattr(incident, 'postmortem_published_at') and incident.postmortem_published_at:
+                        postmortem_info += f"\n[dim]Published: {incident.postmortem_published_at}[/dim]"
+
+                # Timestamps
                 timestamps = f"""
 
 [bold cyan]Timestamps:[/bold cyan]
@@ -169,8 +273,12 @@ class IncidentsCommand(BaseCommand):
                 if hasattr(incident, 'resolved_at') and incident.resolved_at:
                     timestamps += f"""
 • Resolved: [white]{incident.resolved_at}[/white]"""
+                
+                if hasattr(incident, 'monitoring_at') and incident.monitoring_at:
+                    timestamps += f"""
+• Monitoring: [white]{incident.monitoring_at.strftime('%Y-%m-%d %H:%M:%S UTC') if not isinstance(incident.monitoring_at, str) else incident.monitoring_at}[/white]"""
 
-                full_info = f"{basic_info}{description_info}{timestamps}"
+                full_info = f"{basic_info}{components_info}{updates_info}{postmortem_info}{timestamps}"
 
                 panel = Panel(
                     full_info,
@@ -322,10 +430,11 @@ def list_incidents(
 def get_incident(
     incident_id: str = typer.Argument(..., help="Incident ID to retrieve"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information including component and update IDs"),
 ):
     """Get specific incident details"""
     from ..utils.config import get_output_format
-    incidents_cmd = IncidentsCommand(get_output_format())
+    incidents_cmd = IncidentsCommand(get_output_format(), verbose=verbose)
     incidents_cmd.get_incident(page_id, incident_id)
 
 
