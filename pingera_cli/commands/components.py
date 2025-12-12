@@ -345,12 +345,14 @@ class ComponentsCommand(BaseCommand):
                 uptime_dict = {
                     "component_id": component_id,
                     "page_id": page_id,
+                    "name": uptime_data.name if hasattr(uptime_data, 'name') and uptime_data.name else None,
                     "uptime_percentage": uptime_data.uptime_percentage if hasattr(uptime_data, 'uptime_percentage') and uptime_data.uptime_percentage is not None else None,
-                    "total_time": uptime_data.total_time if hasattr(uptime_data, 'total_time') and uptime_data.total_time is not None else None,
-                    "downtime": uptime_data.downtime if hasattr(uptime_data, 'downtime') and uptime_data.downtime is not None else None,
-                    "incidents_count": uptime_data.incidents_count if hasattr(uptime_data, 'incidents_count') and uptime_data.incidents_count is not None else None,
-                    "start_date": start,
-                    "end_date": end,
+                    "range_start": uptime_data.range_start if hasattr(uptime_data, 'range_start') and uptime_data.range_start else start,
+                    "range_end": uptime_data.range_end if hasattr(uptime_data, 'range_end') and uptime_data.range_end else end,
+                    "major_outage": uptime_data.major_outage if hasattr(uptime_data, 'major_outage') and uptime_data.major_outage is not None else 0,
+                    "partial_outage": uptime_data.partial_outage if hasattr(uptime_data, 'partial_outage') and uptime_data.partial_outage is not None else 0,
+                    "related_events": uptime_data.related_events.id if hasattr(uptime_data, 'related_events') and hasattr(uptime_data.related_events, 'id') else [],
+                    "warnings": uptime_data.warnings if hasattr(uptime_data, 'warnings') and uptime_data.warnings else [],
                 }
                 self.output_data(uptime_dict)
             else:
@@ -365,23 +367,61 @@ class ComponentsCommand(BaseCommand):
                 else:
                     uptime_color = "red"
                 
-                uptime_info = f"""[bold cyan]Uptime Statistics:[/bold cyan]
-• Component ID: [white]{component_id}[/white]
-• Uptime: [{uptime_color}]{uptime_pct:.3f}%[/{uptime_color}]
-• Total Time: [white]{uptime_data.total_time if hasattr(uptime_data, 'total_time') else 'N/A'}[/white]
-• Downtime: [white]{uptime_data.downtime if hasattr(uptime_data, 'downtime') else 'N/A'}[/white]
-• Incidents: [white]{uptime_data.incidents_count if hasattr(uptime_data, 'incidents_count') else 0}[/white]"""
+                # Component name
+                component_name = uptime_data.name if hasattr(uptime_data, 'name') and uptime_data.name else "Unknown"
+                
+                uptime_info = f"""[bold cyan]Component:[/bold cyan]
+• Name: [white]{component_name}[/white]
+• ID: [white]{component_id}[/white]
 
-                if start or end:
-                    period_info = f"""
-[bold cyan]Period:[/bold cyan]
-• Start: [white]{start or 'Not specified'}[/white]
-• End: [white]{end or 'Not specified'}[/white]"""
-                    uptime_info += period_info
+[bold cyan]Uptime Statistics:[/bold cyan]
+• Uptime: [{uptime_color}]{uptime_pct:.3f}%[/{uptime_color}]"""
+
+                # Date range
+                range_start = uptime_data.range_start if hasattr(uptime_data, 'range_start') and uptime_data.range_start else start
+                range_end = uptime_data.range_end if hasattr(uptime_data, 'range_end') and uptime_data.range_end else end
+                
+                if range_start or range_end:
+                    uptime_info += f"""
+• Period: [white]{range_start or 'Not specified'}[/white] to [white]{range_end or 'Not specified'}[/white]"""
+
+                # Outage counts
+                major_outage = uptime_data.major_outage if hasattr(uptime_data, 'major_outage') and uptime_data.major_outage is not None else 0
+                partial_outage = uptime_data.partial_outage if hasattr(uptime_data, 'partial_outage') and uptime_data.partial_outage is not None else 0
+                
+                major_color = "red" if major_outage > 0 else "green"
+                partial_color = "yellow" if partial_outage > 0 else "green"
+                
+                uptime_info += f"""
+• Major Outages: [{major_color}]{major_outage}[/{major_color}]
+• Partial Outages: [{partial_color}]{partial_outage}[/{partial_color}]"""
+
+                # Related events
+                if hasattr(uptime_data, 'related_events') and uptime_data.related_events and hasattr(uptime_data.related_events, 'id') and uptime_data.related_events.id:
+                    event_ids = uptime_data.related_events.id
+                    uptime_info += f"""
+
+[bold cyan]Related Events:[/bold cyan]
+• Event Count: [white]{len(event_ids)}[/white]"""
+                    if self.verbose:
+                        for event_id in event_ids[:10]:  # Show first 10 in verbose mode
+                            uptime_info += f"\n  • [dim]{event_id}[/dim]"
+                        if len(event_ids) > 10:
+                            uptime_info += f"\n  • [dim]... and {len(event_ids) - 10} more[/dim]"
+                    else:
+                        uptime_info += "\n[dim]  Use --verbose to see event IDs[/dim]"
+
+                # Warnings
+                if hasattr(uptime_data, 'warnings') and uptime_data.warnings:
+                    uptime_info += f"""
+
+[bold yellow]Warnings:[/bold yellow]"""
+                    for warning in uptime_data.warnings:
+                        uptime_info += f"\n• [yellow]{warning}[/yellow]"
 
                 panel = Panel(
                     uptime_info,
-                    title=f"📊 Component Uptime",
+                    title=f"📊 Component Uptime: {component_name}",
                     border_style="blue",
                     padding=(1, 2),
                 )
