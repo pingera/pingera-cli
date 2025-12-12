@@ -433,6 +433,220 @@ class PagesCommand(BaseCommand):
             self.display_error(f"Failed to delete page: {str(e)}")
             raise typer.Exit(1)
 
+    def get_client_optional_auth(self, require_auth: bool = False):
+        """Get Pingera SDK client with optional authentication"""
+        try:
+            from pingera import ApiClient, Configuration
+            from pingera.api import StatusPagesApi, StatusPagesIncidentsApi, StatusPagesComponentsApi
+            from ..utils.config import get_config
+
+            # Configure the client
+            configuration = Configuration()
+            configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
+            
+            # Only add API key if required or available
+            if require_auth:
+                api_key = get_api_key()
+                if not api_key:
+                    self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+                    raise typer.Exit(1)
+                configuration.api_key['apiKeyAuth'] = api_key
+            else:
+                # Try to get API key but don't fail if not available
+                api_key = get_api_key()
+                if api_key:
+                    configuration.api_key['apiKeyAuth'] = api_key
+
+            # Create API client
+            api_client = ApiClient(configuration)
+            return {
+                'pages': StatusPagesApi(api_client),
+                'incidents': StatusPagesIncidentsApi(api_client),
+                'components': StatusPagesComponentsApi(api_client)
+            }
+        except ImportError:
+            self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
+            raise typer.Exit(1)
+        except Exception as e:
+            self.display_error(f"Failed to initialize client: {str(e)}")
+            raise typer.Exit(1)
+
+    def show_page_by_domain(self, domain: str):
+        """Show page status by domain with incidents and components"""
+        try:
+            # Determine what to send to the API
+            # If it ends with .pingera.ru, send only the subdomain
+            # Otherwise, send the full domain
+            if domain.endswith('.pingera.ru'):
+                # Extract subdomain (everything before .pingera.ru)
+                lookup_domain = domain.replace('.pingera.ru', '')
+            else:
+                lookup_domain = domain
+
+            # Try without authentication first
+            page = None
+            clients = None
+            try:
+                clients = self.get_client_optional_auth(require_auth=False)
+                page = clients['pages'].v1_pages_by_domain_domain_get(domain=lookup_domain)
+            except Exception as e:
+                # If it fails, try with authentication
+                try:
+                    clients = self.get_client_optional_auth(require_auth=True)
+                    page = clients['pages'].v1_pages_by_domain_domain_get(domain=lookup_domain)
+                except Exception as auth_error:
+                    self.display_error(f"Failed to fetch page by domain '{domain}': {str(auth_error)}")
+                    raise typer.Exit(1)
+
+            if not page:
+                self.display_error(f"Page not found for domain: {domain}")
+                raise typer.Exit(1)
+
+            page_id = str(page.id) if hasattr(page, 'id') else None
+            
+            # Fetch unresolved incidents
+            unresolved_incidents = []
+            try:
+                all_incidents = clients['incidents'].v1_pages_page_id_incidents_get(page_id=page_id)
+                if all_incidents:
+                    for incident in all_incidents:
+                        if hasattr(incident, 'status') and incident.status and incident.status != 'resolved':
+                            unresolved_incidents.append(incident)
+            except Exception:
+                # Incidents might not be accessible, continue anyway
+                pass
+
+            # Fetch components
+            components = []
+            try:
+                components = clients['components'].v1_pages_page_id_components_get(page_id=page_id)
+                if not components:
+                    components = []
+            except Exception:
+                # Components might not be accessible, continue anyway
+                pass
+
+            # Prepare output based on format
+            if self.output_format in ['json', 'yaml']:
+                # JSON/YAML output
+                page_data = {
+                    "page": {
+                        "id": page_id,
+                        "name": page.name if hasattr(page, 'name') else None,
+                        "domain": domain,
+                        "url": page.url if hasattr(page, 'url') and page.url else None,
+                        "headline": page.headline if hasattr(page, 'headline') and page.headline else None,
+                    },
+                    "status": "operational" if len(unresolved_incidents) == 0 else "degraded",
+                    "unresolved_incidents": [
+                        {
+                            "id": str(inc.id) if hasattr(inc, 'id') else None,
+                            "name": inc.name if hasattr(inc, 'name') else None,
+                            "status": inc.status if hasattr(inc, 'status') else None,
+                            "impact": inc.impact if hasattr(inc, 'impact') else None,
+                            "created_at": inc.created_at.isoformat() if hasattr(inc, 'created_at') and inc.created_at else None,
+                        }
+                        for inc in unresolved_incidents
+                    ],
+                    "components": [
+                        {
+                            "id": str(comp.id) if hasattr(comp, 'id') else None,
+                            "name": comp.name if hasattr(comp, 'name') else None,
+                            "status": comp.status if hasattr(comp, 'status') else None,
+                            "description": comp.description if hasattr(comp, 'description') and comp.description else None,
+                        }
+                        for comp in components
+                    ]
+                }
+                self.output_data(page_data)
+            else:
+                # Rich formatted output
+                page_name = page.name if hasattr(page, 'name') else "Unknown"
+                headline = page.headline if hasattr(page, 'headline') and page.headline else ""
+                
+                # Overall status
+                if len(unresolved_incidents) == 0:
+                    overall_status = "[green]✓ All Systems Operational[/green]"
+                else:
+                    overall_status = f"[red]⚠ {len(unresolved_incidents)} Active Incident{'s' if len(unresolved_incidents) > 1 else ''}[/red]"
+
+                # Build page info
+                page_info = f"""[bold cyan]Status Page:[/bold cyan]
+• Name: [white]{page_name}[/white]
+• Domain: [blue]{domain}[/blue]"""
+                
+                if headline:
+                    page_info += f"\n• Headline: [white]{headline}[/white]"
+                
+                page_info += f"\n\n[bold cyan]Overall Status:[/bold cyan]\n{overall_status}"
+
+                # Unresolved incidents section
+                incidents_info = ""
+                if unresolved_incidents:
+                    incidents_info = f"\n\n[bold red]Active Incidents ({len(unresolved_incidents)}):[/bold red]"
+                    for inc in unresolved_incidents:
+                        inc_name = inc.name if hasattr(inc, 'name') else "Unknown"
+                        inc_status = inc.status if hasattr(inc, 'status') else "unknown"
+                        inc_impact = inc.impact if hasattr(inc, 'impact') else "unknown"
+                        
+                        impact_color = {
+                            'none': 'green',
+                            'minor': 'yellow',
+                            'major': 'red',
+                            'critical': 'bold red'
+                        }.get(inc_impact, 'white')
+                        
+                        incidents_info += f"\n• [{impact_color}]{inc_name}[/{impact_color}] - {inc_status} (Impact: {inc_impact})"
+
+                # Components section
+                components_info = ""
+                if components:
+                    components_info = f"\n\n[bold cyan]Components ({len(components)}):[/bold cyan]"
+                    for comp in components:
+                        comp_name = comp.name if hasattr(comp, 'name') else "Unknown"
+                        comp_status = comp.status if hasattr(comp, 'status') else "unknown"
+                        
+                        status_color = {
+                            'operational': 'green',
+                            'degraded_performance': 'yellow',
+                            'partial_outage': 'yellow',
+                            'major_outage': 'red',
+                            'under_maintenance': 'blue'
+                        }.get(comp_status, 'white')
+                        
+                        status_icon = {
+                            'operational': '✓',
+                            'degraded_performance': '⚠',
+                            'partial_outage': '⚠',
+                            'major_outage': '✗',
+                            'under_maintenance': '🔧'
+                        }.get(comp_status, '•')
+                        
+                        components_info += f"\n{status_icon} [{status_color}]{comp_name}[/{status_color}] - {comp_status}"
+                else:
+                    components_info = "\n\n[dim]No components configured[/dim]"
+
+                # Combine all sections
+                full_info = f"{page_info}{incidents_info}{components_info}"
+
+                # Determine border color based on status
+                border_color = "green" if len(unresolved_incidents) == 0 else "red"
+                
+                panel = Panel(
+                    full_info,
+                    title=f"📊 {page_name}",
+                    border_style=border_color,
+                    padding=(1, 2),
+                )
+
+                self.console.print(panel)
+
+        except typer.Exit:
+            raise
+        except Exception as e:
+            self.display_error(f"Failed to show page: {str(e)}")
+            raise typer.Exit(1)
+
 
 # Create Typer app for pages commands
 app = typer.Typer(name="pages", help="📄 Manage status pages", no_args_is_help=True)
@@ -581,3 +795,13 @@ def delete_page(
     from ..utils.config import get_output_format
     pages_cmd = PagesCommand(get_output_format())
     pages_cmd.delete_page(page_id, confirm)
+
+
+@app.command("show")
+def show_page_by_domain(
+    domain: str = typer.Argument(..., help="Domain or subdomain (e.g., 'status.pingera.ru' or 'mystatus.example.com')"),
+):
+    """Show page status, incidents, and components by domain"""
+    from ..utils.config import get_output_format
+    pages_cmd = PagesCommand(get_output_format())
+    pages_cmd.show_page_by_domain(domain)
