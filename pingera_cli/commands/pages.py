@@ -437,11 +437,12 @@ class PagesCommand(BaseCommand):
 # Create Typer app for pages commands
 app = typer.Typer(name="pages", help="📄 Manage status pages", no_args_is_help=True)
 
-# Import components app to nest it under pages
-from . import components
+# Import components and incidents apps to nest under pages
+from . import components, incidents
 
-# Add components as a subcommand under pages
+# Add subcommands under pages
 app.add_typer(components.app, name="components")
+app.add_typer(incidents.app, name="incidents")
 
 
 @app.command("list")
