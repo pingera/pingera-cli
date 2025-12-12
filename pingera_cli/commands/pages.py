@@ -640,6 +640,9 @@ class PagesCommand(BaseCommand):
                 )
 
                 self.console.print(panel)
+                
+                # Add helpful hint
+                self.console.print(f"\n[dim]💡 View past incidents: pngr pages incidents list -p {page_id}[/dim]")
 
         except typer.Exit:
             raise
