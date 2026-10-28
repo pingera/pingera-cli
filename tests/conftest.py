@@ -8,12 +8,21 @@ import shutil
 import tempfile
 import json
 from unittest.mock import Mock, patch
-from typer.testing import CliRunner
 from pathlib import Path
+
+_ORIGINAL_ENV = {
+    key: os.environ.get(key)
+    for key in ('XDG_CONFIG_HOME', 'PINGERA_API_KEY', '_TYPER_FORCE_DISABLE_TERMINAL')
+}
+
+# Typer forces Rich terminal styling when GITHUB_ACTIONS/FORCE_COLOR/PY_COLORS is set, which
+# wraps option names in ANSI codes and breaks output assertions. It reads this at import time.
+os.environ['_TYPER_FORCE_DISABLE_TERMINAL'] = '1'
+
+from typer.testing import CliRunner  # noqa: E402
 
 # Importing the CLI instantiates commands that read the config file, so isolate the
 # config location before any pingera_cli import (i.e. during test collection too).
-_ORIGINAL_ENV = {key: os.environ.get(key) for key in ('XDG_CONFIG_HOME', 'PINGERA_API_KEY')}
 _SESSION_XDG_DIR = tempfile.mkdtemp(prefix='pngr-test-xdg-')
 os.environ['XDG_CONFIG_HOME'] = _SESSION_XDG_DIR
 os.environ.pop('PINGERA_API_KEY', None)
