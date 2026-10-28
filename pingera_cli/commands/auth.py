@@ -84,6 +84,8 @@ class AuthCommand(BaseCommand):
                 self.console.print("[red]Failed to save API key to configuration file.[/red]")
                 raise typer.Exit(1)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Login failed: {str(e)}")
             raise typer.Exit(1)
@@ -143,6 +145,8 @@ API Key: ✗ Not set
 
             self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to check authentication status: {str(e)}")
             raise typer.Exit(1)
@@ -203,6 +207,8 @@ API Key: ✗ Not set
 
         except KeyboardInterrupt:
             self.console.print("\n[yellow]⚠ Operation cancelled[/yellow]")
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Logout failed: {str(e)}")
             raise typer.Exit(1)
@@ -243,6 +249,8 @@ API Key: ✗ Not set
             return "[yellow]⚠ Cannot validate (Pingera SDK not available)[/yellow]"
         except UnauthorizedException:
             return "[red]❌ Invalid or expired[/red]"
+        except typer.Exit:
+            raise
         except Exception as e:
             # Handle other API errors gracefully
             error_msg = str(e).lower()

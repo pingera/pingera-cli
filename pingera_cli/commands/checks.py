@@ -11,11 +11,21 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.prompt import Confirm
 
-from .base import BaseCommand
+from .base import BaseCommand, to_plain
+from ..utils.time_utils import parse_time_arg
 from ..utils.config import get_api_key
 
 # Supported check types
 SUPPORTED_CHECK_TYPES = ["web", "api", "tcp", "ssl", "dns", "icmp", "portscan", "synthetic", "multistep"]
+
+
+def _format_schedule(check) -> str:
+    """Human-readable schedule for interval- and cron-scheduled checks."""
+    if getattr(check, 'scheduling_type', None) == 'cron':
+        return f"cron '{check.cron_schedule}'"
+    if getattr(check, 'interval', None):
+        return f"every {check.interval}s"
+    return "-"
 
 
 class ChecksCommand(BaseCommand):
@@ -49,6 +59,8 @@ class ChecksCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -76,6 +88,8 @@ class ChecksCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -124,6 +138,8 @@ class ChecksCommand(BaseCommand):
                         "url": check.url if check.url else None,
                         "status": check.status if check.status else None,
                         "interval": check.interval if check.interval else None,
+                        "scheduling_type": getattr(check, 'scheduling_type', None),
+                        "cron_schedule": getattr(check, 'cron_schedule', None),
                         "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None,
                         "group_id": check.group_id if hasattr(check, 'group_id') else None,
                         "group": {
@@ -167,7 +183,7 @@ class ChecksCommand(BaseCommand):
                 table.add_column("Type", style="blue")
                 table.add_column("URL", style="yellow")
                 table.add_column("Active", style="magenta")
-                table.add_column("Interval", style="white")
+                table.add_column("Schedule", style="white")
                 table.add_column("Status", style="white")
                 table.add_column("Created", style="dim")
 
@@ -213,7 +229,10 @@ class ChecksCommand(BaseCommand):
                     active_status = "✅" if hasattr(check, 'active') and check.active else "❌"
 
                     # Handle interval
-                    interval_display = f"{check.interval}s" if hasattr(check, 'interval') and check.interval else "-"
+                    if getattr(check, 'scheduling_type', None) == 'cron':
+                        interval_display = f"cron {check.cron_schedule}"
+                    else:
+                        interval_display = f"{check.interval}s" if hasattr(check, 'interval') and check.interval else "-"
 
                     # Handle status
                     status_display = str(check.status) if hasattr(check, 'status') and check.status else "-"
@@ -254,6 +273,8 @@ class ChecksCommand(BaseCommand):
                     self.console.print(f"[dim]💡 Filter checks: --type <type>, --status <status>, --name <name>, --group-id <id>[/dim]")
                     self.console.print(f"[dim]💡 Multiple statuses: --status 'ok,failed'[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list checks: {str(e)}")
             raise typer.Exit(1)
@@ -276,6 +297,10 @@ class ChecksCommand(BaseCommand):
                     "host": check.host if hasattr(check, 'host') and check.host else None,
                     "port": check.port if hasattr(check, 'port') and check.port else None,
                     "interval": check.interval if check.interval else None,
+                    "scheduling_type": getattr(check, 'scheduling_type', None),
+                    "cron_schedule": getattr(check, 'cron_schedule', None),
+                    "effective_interval": getattr(check, 'effective_interval', None),
+                    "credit_throttled": getattr(check, 'credit_throttled', None),
                     "timeout": check.timeout if check.timeout else None,
                     "created_at": check.created_at.isoformat() if hasattr(check, 'created_at') and check.created_at else None,
                     "updated_at": check.updated_at.isoformat() if hasattr(check, 'updated_at') and check.updated_at else None,
@@ -325,7 +350,7 @@ class ChecksCommand(BaseCommand):
 
                 # Timing information
                 timing_info = f"""[bold cyan]Timing & Monitoring:[/bold cyan]
-• Interval: [white]{check.interval}s[/white] ({check.interval // 60} minutes)
+• Schedule: [white]{_format_schedule(check)}[/white]{f" ({check.interval // 60} minutes)" if getattr(check, 'scheduling_type', None) != 'cron' and check.interval else ""}{" [yellow](throttled: low credits)[/yellow]" if getattr(check, 'credit_throttled', False) else ""}
 • Timeout: [white]{check.timeout}s[/white]
 • Created: [white]{check.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if check.created_at else 'Unknown'}[/white]
 • Updated: [white]{check.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') if hasattr(check, 'updated_at') and check.updated_at else 'Unknown'}[/white]
@@ -397,6 +422,8 @@ class ChecksCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get check: {str(e)}")
             raise typer.Exit(1)
@@ -411,15 +438,22 @@ class ChecksCommand(BaseCommand):
 
             return load_check_file(file_path)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(str(e))
             raise typer.Exit(1)
 
-    def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: int = 300, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, regions: Optional[str] = None):
+    def create_check(self, name: str, check_type: str, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: int = 30, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, from_file: Optional[str] = None, regions: Optional[str] = None, cron: Optional[str] = None):
         """Create a new monitoring check"""
         try:
             import json
             import os
+
+            if interval is not None and cron is not None:
+                self.display_error("Use either --interval or --cron, not both")
+                raise typer.Exit(1)
+
             checks_api = self.get_client()
 
             # If creating from file, parse file and merge with command line options
@@ -428,22 +462,29 @@ class ChecksCommand(BaseCommand):
 
                 # Filter only SDK-recognized fields from file data
                 # This ignores marketplace-specific fields and other extensions
-                sdk_fields = ["name", "type", "url", "host", "port", "interval", "timeout", "parameters", "active", "secrets"]
+                sdk_fields = ["name", "type", "url", "host", "port", "interval", "scheduling_type", "cron_schedule", "timeout", "parameters", "active", "secrets"]
                 filtered_file_data = {k: v for k, v in file_data.items() if k in sdk_fields}
 
                 # Command line options take precedence over file data
                 check_data = {
                     "name": filtered_file_data.get("name", name),
                     "type": filtered_file_data.get("type", check_type),
-                    "interval": filtered_file_data.get("interval", interval),
                     "timeout": filtered_file_data.get("timeout", timeout)
                 }
 
+                # Scheduling from the file applies unless --interval or --cron was given explicitly
+                if interval is None and cron is None:
+                    if filtered_file_data.get("scheduling_type") == "cron" or (
+                        filtered_file_data.get("cron_schedule") and "interval" not in filtered_file_data
+                    ):
+                        cron = filtered_file_data.get("cron_schedule")
+                        if not cron:
+                            self.display_error("cron_schedule is required in the file when scheduling_type is 'cron'")
+                            raise typer.Exit(1)
+                    else:
+                        interval = filtered_file_data.get("interval")
+
                 # Override with command line values if provided (but only if they were explicitly changed from defaults)
-                # We need to be more careful about when to override file values
-                # For now, just use file values and let user override with explicit CLI options
-                if interval != 300:  # Only override if interval was explicitly provided
-                    check_data["interval"] = interval
                 if timeout != 30:  # Only override if timeout was explicitly provided
                     check_data["timeout"] = timeout
 
@@ -492,9 +533,15 @@ class ChecksCommand(BaseCommand):
                 check_data = {
                     "name": name,
                     "type": check_type,
-                    "interval": interval,
                     "timeout": timeout
                 }
+
+            if cron is not None:
+                check_data["scheduling_type"] = "cron"
+                check_data["cron_schedule"] = cron
+            else:
+                check_data["scheduling_type"] = "interval"
+                check_data["interval"] = interval if interval is not None else 300
 
             # Add URL if provided (required for web, api, ssl checks)
             if url is not None:
@@ -583,17 +630,24 @@ class ChecksCommand(BaseCommand):
                 success_details.append(f"Port: {port}")
             if pw_script_file:
                 success_details.append(f"Script: loaded from {pw_script_file}")
+            success_details.append(f"Schedule: {_format_schedule(check)}")
+
+            if self.output_format in ['json', 'yaml']:
+                self.output_data(to_plain(check))
+                return
 
             self.display_success(
                 f"Check '{actual_name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Check Created"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create check: {str(e)}")
             raise typer.Exit(1)
 
-    def update_check(self, check_id: str, name: Optional[str] = None, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: Optional[int] = None, active: Optional[bool] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, regions: Optional[str] = None):
+    def update_check(self, check_id: str, name: Optional[str] = None, url: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None, interval: Optional[int] = None, timeout: Optional[int] = None, active: Optional[bool] = None, parameters: Optional[str] = None, pw_script_file: Optional[str] = None, regions: Optional[str] = None, cron: Optional[str] = None):
         """Update an existing check"""
         try:
             import json
@@ -610,8 +664,15 @@ class ChecksCommand(BaseCommand):
                 update_data["host"] = host
             if port is not None:
                 update_data["port"] = port
+            if interval is not None and cron is not None:
+                self.display_error("Use either --interval or --cron, not both")
+                raise typer.Exit(1)
             if interval is not None:
+                update_data["scheduling_type"] = "interval"
                 update_data["interval"] = interval
+            if cron is not None:
+                update_data["scheduling_type"] = "cron"
+                update_data["cron_schedule"] = cron
             if timeout is not None:
                 update_data["timeout"] = timeout
             if active is not None:
@@ -662,7 +723,7 @@ class ChecksCommand(BaseCommand):
                 update_data["parameters"] = params_dict
 
             if not update_data:
-                self.display_warning("No updates specified. Use --name, --url, --host, --port, --interval, --timeout, --active/--inactive, --parameters, or --pw-script-file to update.")
+                self.display_warning("No updates specified. Use --name, --url, --host, --port, --interval, --cron, --timeout, --active/--inactive, --parameters, or --pw-script-file to update.")
                 return
 
             # Use the actual SDK method with the correct parameter name
@@ -682,8 +743,8 @@ class ChecksCommand(BaseCommand):
                 updated_fields.append(f"host: {check.host}")
             if port is not None:
                 updated_fields.append(f"port: {check.port}")
-            if interval is not None:
-                updated_fields.append(f"interval: {check.interval}s")
+            if interval is not None or cron is not None:
+                updated_fields.append(f"schedule: {_format_schedule(check)}")
             if timeout is not None:
                 updated_fields.append(f"timeout: {check.timeout}s")
             if pw_script_file is not None:
@@ -693,11 +754,17 @@ class ChecksCommand(BaseCommand):
 
             update_summary = "\n".join([f"• {field}" for field in updated_fields]) if updated_fields else ""
 
+            if self.output_format in ['json', 'yaml']:
+                self.output_data(to_plain(check))
+                return
+
             self.display_success(
                 f"Check {check_id} updated successfully!\n{update_summary}{status_msg}",
                 "✅ Check Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update check: {str(e)}")
             raise typer.Exit(1)
@@ -713,11 +780,17 @@ class ChecksCommand(BaseCommand):
             client = self.get_client()
             client.v1_checks_check_id_delete(check_id=check_id)
 
+            if self.machine_output:
+                self.output_data({"deleted": True, "id": check_id})
+                return
+
             self.display_success(
                 f"Check {check_id} deleted successfully!",
                 "✅ Check Deleted"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete check: {str(e)}")
             raise typer.Exit(1)
@@ -743,9 +816,9 @@ class ChecksCommand(BaseCommand):
 
             # Add optional filters
             if from_date:
-                params["start_date"] = from_date
+                params["start_date"] = parse_time_arg(from_date, "--from")
             if to_date:
-                params["end_date"] = to_date
+                params["end_date"] = parse_time_arg(to_date, "--to")
             if status:
                 params["status"] = status
             if check_type:
@@ -926,6 +999,8 @@ class ChecksCommand(BaseCommand):
                 for hint in hints:
                     self.console.print(f"[dim]💡 {hint}[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get check results: {str(e)}")
             raise typer.Exit(1)
@@ -946,6 +1021,8 @@ class ChecksCommand(BaseCommand):
             self.display_info("Or use: pngr checks results <check-id> to list all results first")
             return
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get result details: {str(e)}")
             raise typer.Exit(1)
@@ -981,6 +1058,8 @@ class ChecksCommand(BaseCommand):
                 # Rich formatted detailed view
                 self._display_detailed_result(result, verbose)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get result details: {str(e)}")
             raise typer.Exit(1)
@@ -1134,6 +1213,8 @@ class ChecksCommand(BaseCommand):
                     self.console.print(f"[dim]💡 Filter by check type: pngr checks list-regions --type <type>[/dim]")
                     self.console.print(f"[dim]💡 Available check types: web, api, tcp, ssl, synthetic, multistep[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list regions: {str(e)}")
             raise typer.Exit(1)
@@ -1150,10 +1231,11 @@ class ChecksCommand(BaseCommand):
             try:
                 from pingera import ApiClient, Configuration
                 from pingera.api import CheckGroupsApi
+                from ..utils.config import get_config
 
                 # Configure the client
                 configuration = Configuration()
-                configuration.host = "https://api.pingera.ru"
+                configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
                 configuration.api_key['apiKeyAuth'] = api_key
 
                 # Create API client
@@ -1174,11 +1256,17 @@ class ChecksCommand(BaseCommand):
             # Use the actual SDK method
             result = groups_api.v1_checks_check_id_group_patch(check_id=check_id, generated=assignment_data)
 
+            if self.machine_output:
+                self.output_model(result)
+                return
+
             self.display_success(
                 f"Check {check_id} {action_msg} successfully!",
                 "✅ Group Assignment Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to assign check to group: {str(e)}")
             raise typer.Exit(1)
@@ -1239,7 +1327,8 @@ def create_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="URL to monitor (required for web, api, ssl checks)"),
     host: Optional[str] = typer.Option(None, "--host", help="Hostname/IP for TCP/SSL/ICMP/DNS checks (max 255 characters)"),
     port: Optional[int] = typer.Option(None, "--port", help="Port number for TCP checks (1-65535)"),
-    interval: int = typer.Option(300, "--interval", "-i", help="Check interval in seconds"),
+    interval: Optional[int] = typer.Option(None, "--interval", "-i", help="Check interval in seconds (default: 300)"),
+    cron: Optional[str] = typer.Option(None, "--cron", help="Cron expression to schedule the check instead of a fixed interval (e.g. '0 9 * * 1-5')"),
     timeout: int = typer.Option(30, "--timeout", help="Timeout in seconds"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"regions\": [\"US\", \"EU\"]}')"),
     pw_script_file: Optional[str] = typer.Option(None, "--pw-script-file", help="Path to file containing Playwright script for synthetic/multistep checks"),
@@ -1272,7 +1361,7 @@ def create_check(
         raise typer.Exit(1)
 
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file, regions)
+    checks_cmd.create_check(name, check_type, url, host, port, interval, timeout, parameters, pw_script_file, from_file, regions, cron)
 
 
 @app.command("update")
@@ -1282,7 +1371,8 @@ def update_check(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="New URL"),
     host: Optional[str] = typer.Option(None, "--host", help="New hostname/IP for TCP/SSL checks (max 255 characters)"),
     port: Optional[int] = typer.Option(None, "--port", help="New port number for TCP checks (1-65535)"),
-    interval: Optional[int] = typer.Option(None, "--interval", "-i", help="New interval in seconds"),
+    interval: Optional[int] = typer.Option(None, "--interval", "-i", help="New interval in seconds (switches the check to interval scheduling)"),
+    cron: Optional[str] = typer.Option(None, "--cron", help="Cron expression (switches the check to cron scheduling, e.g. '*/15 * * * *')"),
     timeout: Optional[int] = typer.Option(None, "--timeout", help="New timeout in seconds"),
     active: bool = typer.Option(None, "--active/--inactive", help="Enable or disable the check"),
     parameters: Optional[str] = typer.Option(None, "--parameters", help="JSON string with check parameters (e.g., '{\"pw_script\": \"...\", \"regions\": [\"US\", \"EU\"]}')"),
@@ -1292,7 +1382,7 @@ def update_check(
     """Update an existing check. Use --parameters to provide complex parameters like Playwright scripts, regions, etc."""
     from ..utils.config import get_output_format
     checks_cmd = ChecksCommand(get_output_format())
-    checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file, regions)
+    checks_cmd.update_check(check_id, name, url, host, port, interval, timeout, active, parameters, pw_script_file, regions, cron)
 
 
 @app.command("delete")
@@ -1309,8 +1399,8 @@ def delete_check(
 @app.command("results")
 def get_results(
     check_id: Optional[str] = typer.Argument(None, help="Check ID (optional - if not provided, returns all results)"),
-    from_date: Optional[str] = typer.Option(None, "--from", help="Start date (ISO 8601) - max 6 months ago"),
-    to_date: Optional[str] = typer.Option(None, "--to", help="End date (ISO 8601)"),
+    from_date: Optional[str] = typer.Option(None, "--from", help="Start (ISO 8601 or relative like 7d, 24h) - max 6 months ago"),
+    to_date: Optional[str] = typer.Option(None, "--to", help="End (ISO 8601 or relative)"),
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
     page_size: int = typer.Option(20, "--page-size", "-s", help="Items per page (1-100)"),
     status: Optional[str] = typer.Option(None, "--status", help="Filter by status (ok, failed, degraded, timeout, pending)"),
@@ -1386,3 +1476,7 @@ app.add_typer(jobs_app, name="jobs")
 app.add_typer(groups_app, name="groups")
 app.add_typer(check_secrets_app, name="secrets")
 app.add_typer(execution_groups_app, name="execution-groups")
+
+from .check_metrics import register as _register_metrics_commands  # noqa: E402
+
+_register_metrics_commands(app)

@@ -10,7 +10,7 @@ from typing import Optional
 import typer
 from rich.table import Table
 
-from .base import BaseCommand
+from .base import BaseCommand, to_plain
 from ..utils.config import get_api_key, get_output_format
 from ..utils.console import console
 
@@ -46,6 +46,8 @@ class SecretsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -73,7 +75,7 @@ class SecretsCommand(BaseCommand):
             if self.output_format in ['json', 'yaml']:
                 # Convert to dict for JSON/YAML output
                 secrets_data = {
-                    'secrets': [secret.to_dict() for secret in secrets],
+                    'secrets': [to_plain(secret) for secret in secrets],
                     'pagination': pagination if pagination else {
                         'page': page,
                         'page_size': page_size,
@@ -114,6 +116,8 @@ class SecretsCommand(BaseCommand):
                 else:
                     console.print(f"\n[dim]Found {len(secrets)} secrets[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list secrets: {str(e)}")
             raise typer.Exit(1)
@@ -128,7 +132,7 @@ class SecretsCommand(BaseCommand):
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
-                self.output_data(secret.to_dict())
+                self.output_data(to_plain(secret))
             else:
                 # Table format
                 table = Table(title=f"Secret Details: {secret.secret_name}")
@@ -149,6 +153,8 @@ class SecretsCommand(BaseCommand):
 
                 console.print(table)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get secret: {str(e)}")
             raise typer.Exit(1)
@@ -172,7 +178,7 @@ class SecretsCommand(BaseCommand):
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
-                self.output_data(created_secret.to_dict())
+                self.output_data(to_plain(created_secret))
             else:
                 self.display_success(f"Secret '{name}' created successfully with ID: {created_secret.id}")
                 
@@ -187,6 +193,8 @@ class SecretsCommand(BaseCommand):
 
                 console.print(table)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create secret: {str(e)}")
             raise typer.Exit(1)
@@ -207,7 +215,7 @@ class SecretsCommand(BaseCommand):
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
-                self.output_data(updated_secret.to_dict())
+                self.output_data(to_plain(updated_secret))
             else:
                 self.display_success(f"Secret '{updated_secret.secret_name}' updated successfully")
                 
@@ -222,6 +230,8 @@ class SecretsCommand(BaseCommand):
 
                 console.print(table)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update secret: {str(e)}")
             raise typer.Exit(1)
@@ -255,6 +265,8 @@ class SecretsCommand(BaseCommand):
             else:
                 self.display_success(f"Secret '{secret_name}' deleted successfully")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete secret: {str(e)}")
             raise typer.Exit(1)

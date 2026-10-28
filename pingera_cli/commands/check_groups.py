@@ -46,6 +46,8 @@ class CheckGroupsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -145,6 +147,8 @@ class CheckGroupsCommand(BaseCommand):
                 self.console.print(table)
                 self.console.print(f"\n[dim]Found {len(response.groups)} groups[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list groups: {str(e)}")
             raise typer.Exit(1)
@@ -203,6 +207,8 @@ class CheckGroupsCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get group: {str(e)}")
             raise typer.Exit(1)
@@ -245,11 +251,17 @@ class CheckGroupsCommand(BaseCommand):
             if position is not None:
                 success_details.append(f"Position: {position}")
 
+            if self.machine_output:
+                self.output_model(group)
+                return
+
             self.display_success(
                 f"Check group '{name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Group Created"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create group: {str(e)}")
             raise typer.Exit(1)
@@ -304,11 +316,17 @@ class CheckGroupsCommand(BaseCommand):
 
             update_summary = "\n".join([f"• {field}" for field in updated_fields]) if updated_fields else ""
 
+            if self.machine_output:
+                self.output_model(group)
+                return
+
             self.display_success(
                 f"Check group {group_id} updated successfully!\n{update_summary}{status_msg}",
                 "✅ Group Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update group: {str(e)}")
             raise typer.Exit(1)
@@ -324,11 +342,17 @@ class CheckGroupsCommand(BaseCommand):
             groups_api = self.get_client()
             groups_api.v1_check_groups_group_id_delete(group_id=group_id)
 
+            if self.machine_output:
+                self.output_data({"deleted": True, "id": group_id})
+                return
+
             self.display_success(
                 f"Check group {group_id} deleted successfully!\nAll checks from this group have been moved to ungrouped.",
                 "✅ Group Deleted"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete group: {str(e)}")
             raise typer.Exit(1)
@@ -432,6 +456,8 @@ class CheckGroupsCommand(BaseCommand):
                 self.console.print(f"\n[dim]Found {len(response.checks)} checks in group {group_id}[/dim]")
                 self.console.print(f"[dim]💡 Use 'pngr checks get <check-id>' for detailed check information[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get group checks: {str(e)}")
             raise typer.Exit(1)
@@ -441,10 +467,7 @@ class CheckGroupsCommand(BaseCommand):
 app = typer.Typer(name="groups", help="📁 Manage check groups", no_args_is_help=True)
 
 
-def get_output_format():
-    """Get output format from config"""
-    from ..utils.config import get_config
-    return get_config().get('output_format', 'table')
+from ..utils.config import get_output_format  # noqa: E402
 
 
 @app.command("list")

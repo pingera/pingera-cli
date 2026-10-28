@@ -44,6 +44,8 @@ class ExecutionGroupsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -169,6 +171,8 @@ class ExecutionGroupsCommand(BaseCommand):
                 self.console.print(f"\n[dim]Found {len(response.execution_groups)} execution groups for check {check_id}[/dim]")
                 self.console.print(f"[dim]💡 Use 'pngr checks execution-groups get <group-id>' for detailed group information[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list execution groups: {str(e)}")
             raise typer.Exit(1)
@@ -282,6 +286,8 @@ class ExecutionGroupsCommand(BaseCommand):
                 self.console.print(panel)
                 self.console.print(f"\n[dim]💡 Use 'pngr checks execution-groups regional-results {group.id}' to see regional breakdown[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get execution group: {str(e)}")
             raise typer.Exit(1)
@@ -377,6 +383,8 @@ class ExecutionGroupsCommand(BaseCommand):
                 self.console.print(table)
                 self.console.print(f"\n[dim]Found {len(response.regional_results)} regional results[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get regional results: {str(e)}")
             raise typer.Exit(1)
@@ -386,10 +394,7 @@ class ExecutionGroupsCommand(BaseCommand):
 app = typer.Typer(name="execution-groups", help="🌍 Manage execution groups")
 
 
-def get_output_format():
-    """Get output format from config"""
-    from ..utils.config import get_config
-    return get_config().get('output_format', 'table')
+from ..utils.config import get_output_format  # noqa: E402
 
 
 @app.command("list")

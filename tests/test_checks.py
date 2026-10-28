@@ -8,6 +8,14 @@ import json
 from unittest.mock import Mock, patch
 from datetime import datetime
 from typer.testing import CliRunner
+from pingera.models import (
+    MonitorCheck,
+    MonitorCheckList,
+    Region,
+    RegionsList,
+    UnifiedResult,
+    UnifiedResultList,
+)
 
 from pingera_cli.main import app
 
@@ -22,19 +30,16 @@ class TestChecksCommand:
             mock_api = Mock()
             mock_get_client.return_value = mock_api
 
-            # Mock response
-            mock_response = Mock()
-            mock_check = Mock()
-            mock_check.id = "check_123"
-            mock_check.name = "Test Check"
-            mock_check.type = "web"
-            mock_check.url = "https://example.com"
-            mock_check.status = "ok"
-            mock_check.interval = 300
-            mock_check.created_at = datetime(2023, 1, 1, 12, 0, 0)
-
-            mock_response.checks = [mock_check]
-            mock_api.v1_checks_get.return_value = mock_response
+            mock_check = MonitorCheck(
+                id="check_123",
+                name="Test Check",
+                type="web",
+                url="https://example.com",
+                status="ok",
+                interval=300,
+                created_at=datetime(2023, 1, 1, 12, 0, 0),
+            )
+            mock_api.v1_checks_get.return_value = MonitorCheckList(checks=[mock_check])
 
             result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'list'])
 
@@ -43,6 +48,9 @@ class TestChecksCommand:
             assert len(output_data['checks']) == 1
             assert output_data['checks'][0]['id'] == 'check_123'
             assert output_data['checks'][0]['name'] == 'Test Check'
+            assert output_data['checks'][0]['interval'] == 300
+            assert output_data['checks'][0]['created_at'] == '2023-01-01T12:00:00'
+            assert output_data['total'] == 1
 
     def test_list_checks_no_results(self, cli_runner, mock_config_with_api_key):
         """Test checks listing with no results"""
@@ -67,28 +75,31 @@ class TestChecksCommand:
             mock_api = Mock()
             mock_get_client.return_value = mock_api
 
-            mock_check = Mock()
-            mock_check.id = "check_123"
-            mock_check.name = "Test Check"
-            mock_check.type = "web"
-            mock_check.url = "https://example.com"
-            mock_check.status = "ok"
-            mock_check.active = True
-            mock_check.interval = 300
-            mock_check.timeout = 30
-            mock_check.created_at = datetime(2023, 1, 1, 12, 0, 0)
-            mock_check.updated_at = datetime(2023, 1, 2, 12, 0, 0)
-            mock_check.parameters = {"regions": ["US", "EU"]}
+            mock_check = MonitorCheck(
+                id="check_123",
+                name="Test Check",
+                type="web",
+                url="https://example.com",
+                status="ok",
+                active=True,
+                interval=300,
+                timeout=30,
+                created_at=datetime(2023, 1, 1, 12, 0, 0),
+                updated_at=datetime(2023, 1, 2, 12, 0, 0),
+                parameters={"regions": ["US", "EU"]},
+            )
 
             mock_api.v1_checks_check_id_get.return_value = mock_check
 
             result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'get', 'check_123'])
 
             assert result.exit_code == 0
+            mock_api.v1_checks_check_id_get.assert_called_once_with(check_id='check_123')
             output_data = json.loads(result.stdout)
             assert output_data['id'] == 'check_123'
             assert output_data['name'] == 'Test Check'
             assert output_data['active'] is True
+            assert output_data['parameters'] == {"regions": ["US", "EU"]}
 
     def test_create_web_check_success(self, cli_runner, mock_config_with_api_key):
         """Test creating a web check"""
@@ -190,50 +201,70 @@ class TestChecksCommand:
             mock_api = Mock()
             mock_get_unified_client.return_value = mock_api
 
-            mock_response = Mock()
-            mock_result = Mock()
-            mock_result.id = "result_123"
-            mock_result.status = "ok"
-            mock_result.response_time = 250
-            mock_result.created_at = datetime(2023, 1, 1, 12, 0, 0)
-            mock_result.check_id = "check_123"
-            mock_result.check_name = "Test Check"
-            mock_result.check_type = "web"
-
-            mock_response.results = [mock_result]
-            mock_response.pagination = {"total_items": 1}
-            mock_api.v1_checks_all_results_get.return_value = mock_response
+            mock_result = UnifiedResult(
+                id="result_123",
+                status="ok",
+                response_time=250,
+                created_at=datetime(2023, 1, 1, 12, 0, 0),
+                check_id="check_123",
+                check_name="Test Check",
+                check_type="web",
+            )
+            mock_api.v1_checks_all_results_get.return_value = UnifiedResultList(
+                results=[mock_result], pagination={"total_items": 1}
+            )
 
             result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'results', 'check_123'])
 
             assert result.exit_code == 0
+            mock_api.v1_checks_all_results_get.assert_called_once_with(page=1, page_size=20, check_id='check_123')
             output_data = json.loads(result.stdout)
             assert len(output_data['results']) == 1
+            assert output_data['results'][0]['id'] == 'result_123'
+            assert output_data['results'][0]['response_time'] == 250
+            assert output_data['pagination']['total_items'] == 1
 
     def test_get_check_result_detailed_success(self, cli_runner, mock_config_with_api_key):
         """Test getting detailed check result"""
-        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_unified_results_client') as mock_get_unified_client:
             mock_api = Mock()
-            mock_get_client.return_value = mock_api
+            mock_get_unified_client.return_value = mock_api
 
-            mock_result = Mock()
-            mock_result.id = "result_123"
-            mock_result.check_id = "check_123"
-            mock_result.status = "ok"
-            mock_result.response_time = 250
-            mock_result.created_at = datetime(2023, 1, 1, 12, 0, 0)
-            mock_result.check_metadata = {"server": "nginx/1.18.0"}
+            mock_result = UnifiedResult(
+                id="result_123",
+                check_id="check_123",
+                status="ok",
+                response_time=250,
+                created_at=datetime(2023, 1, 1, 12, 0, 0),
+                check_metadata={"server": "nginx/1.18.0"},
+            )
+            mock_api.v1_checks_all_results_get.return_value = UnifiedResultList(results=[mock_result])
 
-            mock_api.v1_checks_check_id_results_check_result_id_get.return_value = mock_result
-
-            result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'result', 'check_123', 'result_123'])
+            result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'result', 'result_123'])
 
             assert result.exit_code == 0
+            mock_api.v1_checks_all_results_get.assert_called_once_with(result_id='result_123')
+            output_data = json.loads(result.stdout)
+            assert output_data['id'] == 'result_123'
+            assert output_data['check_id'] == 'check_123'
+            assert output_data['check_metadata'] == {"server": "nginx/1.18.0"}
+
+    def test_get_check_result_detailed_not_found(self, cli_runner, mock_config_with_api_key):
+        """Test detailed result lookup for an unknown result ID"""
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_unified_results_client') as mock_get_unified_client:
+            mock_api = Mock()
+            mock_get_unified_client.return_value = mock_api
+            mock_api.v1_checks_all_results_get.return_value = UnifiedResultList(results=[])
+
+            result = cli_runner.invoke(app, ['checks', 'result', 'missing_result'])
+
+            assert result.exit_code == 1
+            assert "Result missing_result not found" in result.stderr
 
     def test_checks_without_api_key(self, cli_runner, temp_config_dir):
         """Test checks commands without API key"""
-        with patch.dict('os.environ', {}, clear=True):
-            result = cli_runner.invoke(app, ['checks', 'list'])
+        # PINGERA_API_KEY is removed by the autouse isolation fixture
+        result = cli_runner.invoke(app, ['checks', 'list'])
 
         assert result.exit_code == 1
         assert "API key not found" in result.stderr
@@ -304,15 +335,12 @@ class TestChecksCommand:
             mock_api = Mock()
             mock_get_client.return_value = mock_api
 
-            # Mock response with actual SDK attributes
-            mock_response = Mock()
-            mock_region = Mock()
-            mock_region.id = "US, East coast"
-            mock_region.display_name = "US, East, South Carolina"
-            mock_region.available_check_types = ["web", "api", "tcp", "ssl", "synthetic", "multistep"]
-
-            mock_response.regions = [mock_region]
-            mock_api.v1_checks_get_regions_get.return_value = mock_response
+            mock_region = Region(
+                id="US, East coast",
+                display_name="US, East, South Carolina",
+                available_check_types=["web", "api", "tcp", "ssl", "synthetic", "multistep"],
+            )
+            mock_api.v1_checks_get_regions_get.return_value = RegionsList(regions=[mock_region])
 
             result = cli_runner.invoke(app, ['--output', 'json', 'checks', 'list-regions'])
 
@@ -328,14 +356,12 @@ class TestChecksCommand:
             mock_api = Mock()
             mock_get_client.return_value = mock_api
 
-            mock_response = Mock()
-            mock_region = Mock()
-            mock_region.id = "EU, West"
-            mock_region.display_name = "Europe, West, Belgium"
-            mock_region.available_check_types = ["synthetic", "multistep"]
-
-            mock_response.regions = [mock_region]
-            mock_api.v1_checks_get_regions_get.return_value = mock_response
+            mock_region = Region(
+                id="EU, West",
+                display_name="Europe, West, Belgium",
+                available_check_types=["synthetic", "multistep"],
+            )
+            mock_api.v1_checks_get_regions_get.return_value = RegionsList(regions=[mock_region])
 
             result = cli_runner.invoke(app, [
                 '--output', 'json', 'checks', 'list-regions', '--type', 'synthetic'
@@ -344,6 +370,7 @@ class TestChecksCommand:
             assert result.exit_code == 0
             output_data = json.loads(result.stdout)
             assert output_data['filter']['check_type'] == 'synthetic'
+            assert output_data['regions'][0]['available_check_types'] == ["synthetic", "multistep"]
             mock_api.v1_checks_get_regions_get.assert_called_with(check_type='synthetic')
 
     def test_list_regions_no_results(self, cli_runner, mock_config_with_api_key):
@@ -362,3 +389,74 @@ class TestChecksCommand:
             output_data = json.loads(result.stdout)
             assert output_data['regions'] == []
             assert output_data['total'] == 0
+
+
+class TestCheckScheduling:
+    """Cron scheduling and machine-readable output of create/update"""
+
+    def _created(self, **overrides):
+        data = dict(id="chk_1", name="n", type="web", url="https://example.com", status="pending",
+                    created_at=datetime(2026, 1, 1, 12, 0, 0))
+        data.update(overrides)
+        return MonitorCheck(**data)
+
+    def test_create_with_cron_json_includes_read_only_fields(self, cli_runner, mock_config_with_api_key):
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+            api = mock_get_client.return_value
+            api.v1_checks_post.return_value = self._created(scheduling_type="cron", cron_schedule="0 9 * * 1-5")
+
+            result = cli_runner.invoke(app, ['-o', 'json', 'checks', 'create', '--name', 'n', '--type', 'web',
+                                             '--url', 'https://example.com', '--cron', '0 9 * * 1-5'])
+
+            assert result.exit_code == 0, result.output
+            body = api.v1_checks_post.call_args.kwargs['monitor_check']
+            assert body['scheduling_type'] == 'cron'
+            assert body['cron_schedule'] == '0 9 * * 1-5'
+            assert 'interval' not in body
+            data = json.loads(result.stdout)
+            assert data['id'] == 'chk_1'
+            assert data['status'] == 'pending'
+            assert data['cron_schedule'] == '0 9 * * 1-5'
+
+    def test_create_defaults_to_interval(self, cli_runner, mock_config_with_api_key):
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+            api = mock_get_client.return_value
+            api.v1_checks_post.return_value = self._created(interval=300)
+
+            result = cli_runner.invoke(app, ['checks', 'create', '--name', 'n', '--url', 'https://example.com'])
+
+            assert result.exit_code == 0, result.output
+            body = api.v1_checks_post.call_args.kwargs['monitor_check']
+            assert body['scheduling_type'] == 'interval'
+            assert body['interval'] == 300
+            assert "every 300s" in result.stdout
+
+    def test_interval_and_cron_conflict(self, cli_runner, mock_config_with_api_key):
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+            result = cli_runner.invoke(app, ['checks', 'create', '--name', 'n', '--url', 'https://example.com',
+                                             '--interval', '60', '--cron', '* * * * *'])
+            assert result.exit_code == 1
+            assert "either --interval or --cron" in result.stderr
+            mock_get_client.return_value.v1_checks_post.assert_not_called()
+
+    def test_update_switches_to_cron(self, cli_runner, mock_config_with_api_key):
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+            api = mock_get_client.return_value
+            api.v1_checks_check_id_patch.return_value = self._created(scheduling_type="cron", cron_schedule="*/5 * * * *")
+
+            result = cli_runner.invoke(app, ['checks', 'update', 'chk_1', '--cron', '*/5 * * * *'])
+
+            assert result.exit_code == 0, result.output
+            api.v1_checks_check_id_patch.assert_called_once_with(
+                check_id='chk_1', monitor_check1={'scheduling_type': 'cron', 'cron_schedule': '*/5 * * * *'}
+            )
+            assert "cron '*/5 * * * *'" in result.stdout
+
+    def test_get_cron_check_without_interval(self, cli_runner, mock_config_with_api_key):
+        with patch('pingera_cli.commands.checks.ChecksCommand.get_client') as mock_get_client:
+            mock_get_client.return_value.v1_checks_check_id_get.return_value = self._created(
+                scheduling_type="cron", cron_schedule="0 0 * * *", active=True, timeout=30
+            )
+            result = cli_runner.invoke(app, ['checks', 'get', 'chk_1'])
+            assert result.exit_code == 0, result.output
+            assert "cron '0 0 * * *'" in result.stdout

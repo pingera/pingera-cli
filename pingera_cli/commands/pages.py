@@ -47,6 +47,8 @@ class PagesCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -143,6 +145,8 @@ class PagesCommand(BaseCommand):
                 self.console.print(f"\n[dim]Found {len(response.pages)} pages on page {page}[/dim]")
                 self.console.print(f"[dim]💡 View page details: pngr pages get <page-id>[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list pages: {str(e)}")
             raise typer.Exit(1)
@@ -213,6 +217,8 @@ class PagesCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get page: {str(e)}")
             raise typer.Exit(1)
@@ -240,6 +246,7 @@ class PagesCommand(BaseCommand):
         allow_sms_subscribers: bool = False,
         allow_webhook_subscribers: bool = False,
         allow_rss_atom_feeds: bool = True,
+        template: Optional[str] = None,
     ):
         """Create a new status page"""
         try:
@@ -285,6 +292,8 @@ class PagesCommand(BaseCommand):
                 page_data["notifications_from_email"] = notifications_from_email
             if notifications_email_footer:
                 page_data["notifications_email_footer"] = notifications_email_footer
+            if template:
+                page_data["template_id"] = self.resolve_template(pages_api, template)
 
             # Create the page
             page = pages_api.v1_pages_post(page=page_data)
@@ -301,11 +310,17 @@ class PagesCommand(BaseCommand):
             if hasattr(page, 'subdomain') and page.subdomain:
                 success_details.append(f"URL: https://{page.subdomain}.pingera.ru")
 
+            if self.machine_output:
+                self.output_model(page)
+                return
+
             self.display_success(
                 f"Status page '{name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Page Created"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create page: {str(e)}")
             raise typer.Exit(1)
@@ -334,6 +349,7 @@ class PagesCommand(BaseCommand):
         allow_sms_subscribers: Optional[bool] = None,
         allow_webhook_subscribers: Optional[bool] = None,
         allow_rss_atom_feeds: Optional[bool] = None,
+        template: Optional[str] = None,
     ):
         """Update an existing status page"""
         try:
@@ -386,13 +402,15 @@ class PagesCommand(BaseCommand):
                 page_data["notifications_from_email"] = notifications_from_email
             if notifications_email_footer is not None:
                 page_data["notifications_email_footer"] = notifications_email_footer
+            if template is not None:
+                page_data["template_id"] = self.resolve_template(pages_api, template)
 
             if not page_data:
                 self.display_error("No fields provided to update")
                 raise typer.Exit(1)
 
             # Update the page
-            page = pages_api.v1_pages_page_id_patch(page_id=page_id, page=page_data)
+            page = pages_api.v1_pages_page_id_patch(page_id=page_id, page1=page_data)
 
             # Build success message
             updated_fields = []
@@ -403,15 +421,58 @@ class PagesCommand(BaseCommand):
             if public is not None:
                 updated_fields.append(f"Visibility: {'Public' if public else 'Private'}")
 
+            if self.machine_output:
+                self.output_model(page)
+                return
+
             self.display_success(
                 f"Status page '{page_id}' updated successfully!\n" + 
                 (("\n".join(updated_fields)) if updated_fields else "Fields updated"),
                 "✅ Page Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update page: {str(e)}")
             raise typer.Exit(1)
+
+    def resolve_template(self, pages_api, value: str) -> str:
+        """Map a template name or ID to its ID using the templates endpoint."""
+        templates = pages_api.v1_pages_get_templates_get() or {}
+        for key, tpl in templates.items():
+            if value in (key, tpl.name, tpl.id) and tpl.id:
+                return tpl.id
+        names = ", ".join(sorted(str(tpl.name or key) for key, tpl in templates.items())) or "none"
+        self.display_error(f"Unknown template '{value}'. Available: {names}\nSee: pngr pages templates")
+        raise typer.Exit(1)
+
+    def list_templates(self):
+        """List status page templates"""
+        from pingera.api import StatusPagesApi
+        try:
+            templates = self.api(StatusPagesApi).v1_pages_get_templates_get() or {}
+        except typer.Exit:
+            raise
+        except Exception as e:
+            self.fail("list templates", e)
+
+        if self.machine_output:
+            from .base import to_plain
+            self.output_data({key: to_plain(tpl) for key, tpl in templates.items()})
+            return
+        if not templates:
+            self.display_info("No page templates available.")
+            return
+        table = Table(title="Status page templates", header_style="bold magenta")
+        table.add_column("Name", style="green")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Preview", overflow="fold")
+        for key, tpl in sorted(templates.items(), key=lambda kv: str(kv[1].name or kv[0])):
+            table.add_row(str(tpl.name or key), str(tpl.id or "-"), tpl.preview_url or "[dim]-[/dim]")
+        self.console.print(table)
+        self.console.print("[dim]💡 Use one: pngr pages create --name NAME --template <name-or-id> "
+                           "(or pngr pages update <page-id> --template ...)[/dim]")
 
     def delete_page(self, page_id: str, confirm: bool = False):
         """Delete a status page"""
@@ -424,11 +485,17 @@ class PagesCommand(BaseCommand):
             pages_api = self.get_client()
             pages_api.v1_pages_page_id_delete(page_id=page_id)
 
+            if self.machine_output:
+                self.output_data({"deleted": True, "id": page_id})
+                return
+
             self.display_success(
                 f"Page {page_id} deleted successfully!",
                 "✅ Page Deleted"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete page: {str(e)}")
             raise typer.Exit(1)
@@ -467,6 +534,8 @@ class PagesCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -489,6 +558,8 @@ class PagesCommand(BaseCommand):
             try:
                 clients = self.get_client_optional_auth(require_auth=False)
                 page = clients['pages'].v1_pages_by_domain_domain_get(domain=lookup_domain)
+            except typer.Exit:
+                raise
             except Exception as e:
                 # If it fails, try with authentication
                 try:
@@ -656,10 +727,14 @@ app = typer.Typer(name="pages", help="📄 Manage status pages", no_args_is_help
 
 # Import components and incidents apps to nest under pages
 from . import components, incidents
+from . import component_groups, page_email_domain, page_passwords
 
 # Add subcommands under pages
 app.add_typer(components.app, name="components")
+app.add_typer(component_groups.app, name="component-groups")
 app.add_typer(incidents.app, name="incidents")
+app.add_typer(page_passwords.app, name="passwords")
+app.add_typer(page_email_domain.app, name="email-domain")
 
 
 @app.command("list")
@@ -706,6 +781,7 @@ def create_page(
     allow_sms_subscribers: bool = typer.Option(False, "--allow-sms-subscribers", help="Allow SMS subscriptions"),
     allow_webhook_subscribers: bool = typer.Option(False, "--allow-webhook-subscribers", help="Allow webhook subscriptions"),
     allow_rss_atom_feeds: bool = typer.Option(True, "--allow-rss/--no-rss", help="Provide RSS/Atom feeds"),
+    template: Optional[str] = typer.Option(None, "--template", help="Page template name or ID (see 'pngr pages templates')"),
 ):
     """Create a new status page"""
     from ..utils.config import get_output_format
@@ -732,6 +808,7 @@ def create_page(
         allow_sms_subscribers=allow_sms_subscribers,
         allow_webhook_subscribers=allow_webhook_subscribers,
         allow_rss_atom_feeds=allow_rss_atom_feeds,
+        template=template,
     )
 
 
@@ -759,6 +836,7 @@ def update_page(
     allow_sms_subscribers: Optional[bool] = typer.Option(None, "--allow-sms-subscribers/--no-sms-subscribers", help="Allow/disallow SMS subscriptions"),
     allow_webhook_subscribers: Optional[bool] = typer.Option(None, "--allow-webhook-subscribers/--no-webhook-subscribers", help="Allow/disallow webhook subscriptions"),
     allow_rss_atom_feeds: Optional[bool] = typer.Option(None, "--allow-rss/--no-rss", help="Provide/disable RSS/Atom feeds"),
+    template: Optional[str] = typer.Option(None, "--template", help="Switch to this page template (name or ID, see 'pngr pages templates')"),
 ):
     """Update an existing status page"""
     from ..utils.config import get_output_format
@@ -786,6 +864,7 @@ def update_page(
         allow_sms_subscribers=allow_sms_subscribers,
         allow_webhook_subscribers=allow_webhook_subscribers,
         allow_rss_atom_feeds=allow_rss_atom_feeds,
+        template=template,
     )
 
 
@@ -808,3 +887,10 @@ def show_page_by_domain(
     from ..utils.config import get_output_format
     pages_cmd = PagesCommand(get_output_format())
     pages_cmd.show_page_by_domain(domain)
+
+
+@app.command("templates")
+def list_templates():
+    """List the page templates available for 'pages create/update --template'"""
+    from ..utils.config import get_output_format
+    PagesCommand(get_output_format()).list_templates()

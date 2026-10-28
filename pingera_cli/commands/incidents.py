@@ -47,6 +47,8 @@ class IncidentsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -137,6 +139,8 @@ class IncidentsCommand(BaseCommand):
                 self.console.print(table)
                 self.console.print(f"\n[dim]Found {len(response)} incidents[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list incidents: {str(e)}")
             raise typer.Exit(1)
@@ -309,6 +313,8 @@ class IncidentsCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get incident: {str(e)}")
             raise typer.Exit(1)
@@ -359,11 +365,17 @@ class IncidentsCommand(BaseCommand):
             if components:
                 success_details.append(f"Affected components: {len(components)}")
 
+            if self.machine_output:
+                self.output_model(incident)
+                return
+
             self.display_success(
                 f"Incident '{name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Incident Created"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create incident: {str(e)}")
             raise typer.Exit(1)
@@ -407,11 +419,17 @@ class IncidentsCommand(BaseCommand):
                 incident_update_schema_edit=incident_data
             )
 
+            if self.machine_output:
+                self.output_model(incident)
+                return
+
             self.display_success(
                 f"Incident '{incident_id}' updated successfully!",
                 "✅ Incident Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update incident: {str(e)}")
             raise typer.Exit(1)
@@ -430,11 +448,17 @@ class IncidentsCommand(BaseCommand):
                 incident_id=incident_id
             )
 
+            if self.machine_output:
+                self.output_data({"deleted": True, "id": incident_id})
+                return
+
             self.display_success(
                 f"Incident {incident_id} deleted successfully!",
                 "✅ Incident Deleted"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete incident: {str(e)}")
             raise typer.Exit(1)
@@ -442,6 +466,8 @@ class IncidentsCommand(BaseCommand):
 
 # Create Typer app for incidents commands
 app = typer.Typer(name="incidents", help="🚨 Manage status page incidents", no_args_is_help=True)
+
+from .status_page_common import COMPONENT_STATUSES, INCIDENT_IMPACTS, INCIDENT_STATUSES, MAINTENANCE_STATUSES  # noqa: E402
 
 
 @app.command("list")
@@ -472,11 +498,11 @@ def get_incident(
 @app.command("create")
 def create_incident(
     name: str = typer.Option(..., "--name", "-n", help="Incident name/title"),
-    status: str = typer.Option(..., "--status", "-s", help="Incident status (investigating, identified, monitoring, resolved)"),
+    status: str = typer.Option(..., "--status", "-s", help=f"Incident status: {', '.join(INCIDENT_STATUSES)}. Maintenance statuses ({', '.join(MAINTENANCE_STATUSES)}) allow only --impact maintenance or none; to plan maintenance use 'schedule-maintenance'"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Incident description/body"),
-    impact: Optional[str] = typer.Option(None, "--impact", "-i", help="Impact level (none, minor, major, critical)"),
-    components: Optional[str] = typer.Option(None, "--components", "-c", help="Components as JSON (e.g., '{\"component_id\":\"status\"}'). Valid statuses: operational, degraded_performance, partial_outage, major_outage, under_maintenance"),
+    impact: Optional[str] = typer.Option(None, "--impact", "-i", help=f"Impact: {', '.join(INCIDENT_IMPACTS)}. Default: derived from the worst component status"),
+    components: Optional[str] = typer.Option(None, "--components", "-c", help=f"Components as JSON (e.g., '{{\"component_id\":\"status\"}}'). Valid statuses: {', '.join(COMPONENT_STATUSES)}"),
     no_notifications: bool = typer.Option(False, "--no-notifications", help="Don't send notifications"),
 ):
     """Create a new incident"""
@@ -511,10 +537,10 @@ def update_incident(
     incident_id: str = typer.Argument(..., help="Incident ID to update"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Incident name/title"),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="Incident status"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help=f"Incident status: {', '.join(INCIDENT_STATUSES)} (maintenance: {', '.join(MAINTENANCE_STATUSES)}). Changing status/body posts a new update"),
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Incident description/body"),
-    impact: Optional[str] = typer.Option(None, "--impact", "-i", help="Impact level"),
-    components: Optional[str] = typer.Option(None, "--components", "-c", help="Components as JSON (e.g., '{\"component_id\":\"status\"}'). Valid statuses: operational, degraded_performance, partial_outage, major_outage, under_maintenance"),
+    impact: Optional[str] = typer.Option(None, "--impact", "-i", help=f"Impact: {', '.join(INCIDENT_IMPACTS)}"),
+    components: Optional[str] = typer.Option(None, "--components", "-c", help=f"Components as JSON (e.g., '{{\"component_id\":\"status\"}}'). Valid statuses: {', '.join(COMPONENT_STATUSES)}"),
 ):
     """Update an existing incident"""
     import json
@@ -576,3 +602,10 @@ def list_maintenance_windows(
     from ..utils.config import get_output_format
     incidents_cmd = IncidentsCommand(get_output_format())
     incidents_cmd.list_incidents(page_id, component_id, maintenance=True)
+
+
+from . import incident_extras, incident_updates  # noqa: E402
+
+app.add_typer(incident_updates.updates_app, name="updates")
+app.add_typer(incident_updates.postmortem_app, name="postmortem")
+incident_extras.register(app)
