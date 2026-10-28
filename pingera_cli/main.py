@@ -18,8 +18,15 @@ from .commands.checks import app as checks_app
 from .commands.secrets import app as secrets_app
 from .commands.pages import app as pages_app
 from .commands.on_demand_checks import app as on_demand_app
+from .commands.alerts import app as alerts_app
 from .utils.console import console, error_console
-from .utils.config import get_config
+from .utils.config import (
+    VALID_OUTPUT_FORMATS,
+    get_api_key,
+    get_config,
+    get_output_format,
+    set_runtime_overrides,
+)
 
 # Initialize the main Typer app
 app = typer.Typer(
@@ -38,6 +45,7 @@ app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(checks_app, name="checks")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(pages_app, name="pages")
+app.add_typer(alerts_app, name="alerts")
 
 
 # Quick command aliases (separate help section)
@@ -289,8 +297,12 @@ def info():
     Show information about pngr and Pingera SDK
     """
     try:
-        from pingera import ApiClient
-        sdk_version = getattr(ApiClient, '__version__', 'Unknown')
+        from importlib.metadata import PackageNotFoundError, version as package_version
+        import pingera  # noqa: F401
+        try:
+            sdk_version = package_version("pingera-sdk")
+        except PackageNotFoundError:
+            sdk_version = "Unknown"
         sdk_status = "[green]✓ Installed[/green]"
     except ImportError:
         sdk_version = "Not installed"
@@ -312,7 +324,7 @@ A beautiful CLI tool for Pingera Platform
 
 [bold]🔧 Configuration:[/bold]
 • Config file: {get_config().get('config_path', 'Not found')}
-• API Key: {'[green]✓ Set[/green]' if os.getenv('PINGERA_API_KEY') else '[yellow]⚠ Not set[/yellow]'}
+• API Key: {'[green]✓ Set[/green]' if get_api_key() else '[yellow]⚠ Not set[/yellow]'}
 
 [bold]📚 Usage:[/bold]
 Run [cyan]pngr --help[/cyan] to see available commands.
@@ -338,16 +350,18 @@ def config(
     """
     Manage pngr configuration
     """
-    from .utils.config import set_output_format as save_output_format, get_config, save_config
+    from .utils.config import set_output_format as save_output_format, set_api_key as save_api_key, save_config
 
     if set_api_key:
-        # In a real implementation, this would save to a config file
-        console.print(f"[yellow]Note:[/yellow] Set environment variable PINGERA_API_KEY={set_api_key}")
-        console.print("[green]✓[/green] API key configuration noted. Please set as environment variable.")
+        if save_api_key(set_api_key):
+            console.print("[green]✓[/green] API key saved to configuration file")
+        else:
+            console.print("[red]✗[/red] Failed to save API key")
+            raise typer.Exit(1)
         return
 
     if set_output_format:
-        if set_output_format in ['table', 'json', 'yaml']:
+        if set_output_format in VALID_OUTPUT_FORMATS:
             if save_output_format(set_output_format):
                 console.print(f"[green]✓[/green] Output format set to: {set_output_format}")
             else:
@@ -372,7 +386,7 @@ def config(
 [bold]🔧 Current Configuration:[/bold]
 
 [bold]API Settings:[/bold]
-• API Key: {'[green]✓ Set[/green]' if os.getenv('PINGERA_API_KEY') else '[red]✗ Not set[/red]'}
+• API Key: {'[green]✓ Set[/green]' if get_api_key() else '[red]✗ Not set[/red]'}
 • Base URL: {config_data.get('base_url', 'https://api.pingera.ru')}
 
 [bold]CLI Settings:[/bold]
@@ -401,7 +415,7 @@ def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    output: str = typer.Option("table", "--output", "-o", help="Output format: table, json, yaml"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output format: table, json, yaml (default: from config, or table)"),
 ):
     """
     🚀 pngr - a nice CLI for Pingera platform
@@ -419,18 +433,20 @@ def main(
         console.print(f"[bold blue]PingeraCLI[/bold blue] v{__version__}")
         raise typer.Exit()
 
+    if output is not None and output not in VALID_OUTPUT_FORMATS:
+        error_console.print(f"[red]✗[/red] Invalid output format '{output}'. Use: {', '.join(VALID_OUTPUT_FORMATS)}")
+        raise typer.Exit(2)
+
     # If no command is provided and no version flag, show help
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
         raise typer.Exit()
 
-    if verbose:
-        console.print("[dim]Verbose mode enabled[/dim]")
+    # Global flags apply to this invocation only; persistent defaults are set via `pngr config`
+    set_runtime_overrides(output_format=output, verbose=verbose or None)
 
-    # Store current output format and verbose mode in config temporarily for subcommands
-    from .utils.config import set_output_format as save_output_format, set_verbose_mode
-    save_output_format(output)
-    set_verbose_mode(verbose)
+    if verbose and get_output_format() == 'table':
+        console.print("[dim]Verbose mode enabled[/dim]")
 
 
 def cli_entry_point():

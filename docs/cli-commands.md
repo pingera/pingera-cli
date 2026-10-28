@@ -11,7 +11,7 @@ These options are available for all commands:
 ```
 --api-key <key>         API key for authentication (can also be used PINGERA_API_KEY env var)
 --base-url <url>        API base URL (default: https://api.pingera.ru)
---output <format>       Output format: table, json, yaml (default: table)
+--output <format>       Output format for this invocation: table, json, yaml (default: configured format, or table)
 --page-id <id>          Default page ID for status page operations (can also use PINGERA_PAGE_ID env var)
 --verbose, -v           Enable verbose output
 --help, -h              Show help message
@@ -43,10 +43,10 @@ pngr checks list [--page <num>] [--page-size <size>] [--type <type>] [--status <
 pngr checks get <check-id>
 
 # Create check
-pngr checks create --name <name> --type <type> [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--parameters <json>] [--pw-script-file <path>]
+pngr checks create --name <name> --type <type> [--url <url>] [--host <host>] [--port <port>] [--interval <seconds> | --cron <expression>] [--timeout <seconds>] [--parameters <json>] [--pw-script-file <path>]
 
 # Update check
-pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--port <port>] [--interval <seconds>] [--timeout <seconds>] [--active/--inactive] [--parameters <json>] [--pw-script-file <path>]
+pngr checks update <check-id> [--name <name>] [--url <url>] [--host <host>] [--port <port>] [--interval <seconds> | --cron <expression>] [--timeout <seconds>] [--active/--inactive] [--parameters <json>] [--pw-script-file <path>]
 
 # Delete check
 pngr checks delete <check-id> [--confirm]
@@ -54,15 +54,27 @@ pngr checks delete <check-id> [--confirm]
 # Assign check to group
 pngr checks assign-group <check-id> [--group-id <group-id>]
 
-# Get check results
+# Get check results (dates: ISO 8601 or relative like 30m, 24h, 7d)
 pngr checks results <check-id> [--from <date>] [--to <date>] [--page <num>] [--page-size <size>]
 
 # Get detailed result information
-pngr checks result <check-id> <result-id>
+pngr checks result <result-id> [--verbose]
+
+# Uptime percentage, average response time and an hourly status strip
+pngr checks uptime <check-id> [--from <date>] [--to <date>] [--hourly]
+
+# Status periods (when the check went ok/failed/degraded and for how long)
+pngr checks status-history <check-id> [--page <num>] [--page-size <size>]
+
+# Average / p95 / p99 response times per region
+pngr checks response-times <check-id> [--from <date>] [--to <date>] [--region <region>] [--status <status>] [--buckets]
+
+# Result counts by status per region, for one check or all checks
+pngr checks stats [<check-id>] [--from <date>] [--to <date>] [--region <region>] [--type <type>] [--result-type regular|on_demand] [--with-alerts|--without-alerts] [--buckets]
 
 # Manage on-demand check jobs
 pngr checks jobs list
-pngr checks jobs get <job-id>
+pngr checks jobs status <job-id>
 ```
 
 ### `pngr checks groups`
@@ -132,142 +144,258 @@ pngr checks jobs result <job-id>
 pngr checks jobs list
 ```
 
-## Alerts Commands (soon)
+## Alerts Commands
 
 ### `pngr alerts`
-Manage alerts and notifications.
+🔔 Alerts: fired alerts, alert rules and notification channels
 
 ```bash
-# List alerts
-pngr alerts list [--page <num>] [--page-size <size>] [--status <status>]
+# List fired alerts, newest first
+pngr alerts list [--status <status>] [--check <check-id>] [--severity <severity>] [--from <start>] [--to <end>] [--page <page>] [--per-page <per-page>]
 
-# Get specific alert
+# Show an alert with its rule, check, timeline and triggering results
 pngr alerts get <alert-id>
 
-# Create alert
-pngr alerts create --name <name> --type <type> [--channels <channels>] [--enabled]
+# Acknowledge a firing alert
+pngr alerts ack <alert-id>
 
-# Update alert
-pngr alerts update <alert-id> [--name <name>] [--enabled/--disabled]
+# Manually resolve an active alert
+pngr alerts resolve <alert-id>
 
-# Delete alert
-pngr alerts delete <alert-id> [--confirm]
+# Show the notification delivery log of an alert, grouped by channel
+pngr alerts notifications <alert-id>
 
-# Get alert statistics
+# Show active/recent alert counts, severity breakdown and enabled rules/channels
 pngr alerts stats
-
-# Manage alert channels
-pngr alerts channels list
-pngr alerts channels create --name <name> --type <type> --config <json>
-pngr alerts channels delete <channel-id>
-
-# Manage alert rules
-pngr alerts rules list
-pngr alerts rules create --name <name> --conditions <json>
-pngr alerts rules delete <rule-id>
 ```
 
-## Heartbeats Commands (soon)
-
-### `pngr heartbeats`
-Manage heartbeat monitoring.
+### `pngr alerts rules`
+📏 Manage alert rules (when to alert and whom to notify)
 
 ```bash
-# List heartbeats
-pngr heartbeats list [--page <num>] [--page-size <size>] [--status <status>]
+# List alert rules
+pngr alerts rules list [--check <check-id>] [--enabled/--disabled]
 
-# Get specific heartbeat
-pngr heartbeats get <heartbeat-id>
+# Show a rule: its check, trigger condition, multi-region mode and notified channels
+pngr alerts rules get <rule-id>
 
-# Create heartbeat
-pngr heartbeats create --name <name> --interval <seconds> [--grace-period <seconds>]
+# Create an alert rule for a check
+pngr alerts rules create [--from-file <from-file>] [--name <name>] [--check <check-id>] [--condition <condition>] [--count <count>] [--threshold <threshold>] [--window <window>] [--params <params>] [--severity <severity>] [--channel <channels>...] [--cooldown <cooldown>] [--auto-resolve/--no-auto-resolve] [--regions <regions>] [--regions-count <regions-count>] [--enabled/--disabled]
 
-# Update heartbeat
-pngr heartbeats update <heartbeat-id> --name <name> --interval <seconds>
+# Update an alert rule (only the given fields change; the check can't be changed)
+pngr alerts rules update <rule-id> [--from-file <from-file>] [--name <name>] [--condition <condition>] [--count <count>] [--threshold <threshold>] [--window <window>] [--params <params>] [--severity <severity>] [--channel <channels>...] [--cooldown <cooldown>] [--auto-resolve/--no-auto-resolve] [--regions <regions>] [--regions-count <regions-count>] [--enabled/--disabled]
 
-# Delete heartbeat
-pngr heartbeats delete <heartbeat-id> [--confirm]
+# Enable an alert rule
+pngr alerts rules enable <rule-id>
 
-# Send heartbeat ping
-pngr heartbeats ping <heartbeat-id>
+# Disable (pause) an alert rule without deleting it
+pngr alerts rules disable <rule-id>
 
-# Get heartbeat logs
-pngr heartbeats logs <heartbeat-id> [--from <date>] [--to <date>] [--page <num>]
+# Delete an alert rule and its alert history
+pngr alerts rules delete <rule-id> [--confirm]
 ```
+
+### `pngr alerts channels`
+📣 Manage alert notification channels
+
+```bash
+# List alert channels (secrets masked)
+pngr alerts channels list [--type <channel-type>]
+
+# Show an alert channel and its configuration (secrets masked)
+pngr alerts channels get <channel-id>
+
+# Create an alert channel
+pngr alerts channels create [--from-file <from-file>] [--name <name>] [--type <channel-type>] [--email <emails>...] [--url <url>] [--method <method>] [--header <headers>...] [--timeout <timeout>] [--chat-id <chat-id>] [--phone <phones>...] [--page-id <page-id>] [--component-id <component-id>] [--config <config>] [--enabled/--disabled] [--test]
+
+# Update an alert channel (only the given fields change; the type can't be changed)
+pngr alerts channels update <channel-id> [--from-file <from-file>] [--name <name>] [--email <emails>...] [--url <url>] [--method <method>] [--header <headers>...] [--timeout <timeout>] [--chat-id <chat-id>] [--phone <phones>...] [--page-id <page-id>] [--component-id <component-id>] [--config <config>] [--enabled/--disabled]
+
+# Delete an alert channel (it must not be used by any alert rule)
+pngr alerts channels delete <channel-id> [--confirm]
+
+# Send a test notification through a saved channel, or through an unsaved configuration
+pngr alerts channels test [<channel-id>] [--name <name>] [--type <channel-type>] [--email <emails>...] [--url <url>] [--method <method>] [--header <headers>...] [--timeout <timeout>] [--chat-id <chat-id>] [--config <config>]
+```
+
+## Heartbeats Commands
+
+Heartbeat monitoring is not available in the CLI yet; use the web app or the SDK (`HeartbeatsApi`).
 
 ## Status Pages Commands
 
+Commands that act on a page take `--page-id`/`-p`. Times accept ISO 8601 or relative values (e.g. `7d`).
+
 ### `pngr pages`
-Manage status pages.
+📄 Manage status pages
 
 ```bash
 # List status pages
-pngr pages list [--page <num>] [--page-size <size>]
+pngr pages list [--page <page>] [--page-size <page-size>]
 
-# Get specific status page
+# Get specific page details
 pngr pages get <page-id>
 
 # Create a new status page
-pngr pages create --name "My Status Page" [--subdomain <sub>] [--description <desc>] [--headline <text>] [--url <url>] [--private] [--timezone <tz>]
+pngr pages create --name <name> [--subdomain <subdomain>] [--domain <domain>] [--description <description>] [--headline <headline>] [--url <url>] [--support-url <support-url>] [--private] [--password-protected] [--timezone <time-zone>] [--language <language>] [--country <country>] [--hidden-from-search] [--ga-id <google-analytics-id>] [--ym-id <yandex-metrica-id>] [--notifications-email <notifications-from-email>] [--email-footer <notifications-email-footer>] [--allow-email-subscribers/--no-email-subscribers] [--allow-sms-subscribers] [--allow-webhook-subscribers] [--allow-rss/--no-rss] [--template <template>]
 
 # Update an existing status page
-pngr pages update <page-id> [--name <name>] [--subdomain <sub>] [--description <desc>] [--headline <text>] [--url <url>] [--public/--private] [--timezone <tz>]
+pngr pages update <page-id> [--name <name>] [--subdomain <subdomain>] [--domain <domain>] [--description <description>] [--headline <headline>] [--url <url>] [--support-url <support-url>] [--public/--private] [--password-protected/--no-password] [--timezone <time-zone>] [--language <language>] [--country <country>] [--hidden-from-search/--visible-in-search] [--ga-id <google-analytics-id>] [--ym-id <yandex-metrica-id>] [--notifications-email <notifications-from-email>] [--email-footer <notifications-email-footer>] [--allow-email-subscribers/--no-email-subscribers] [--allow-sms-subscribers/--no-sms-subscribers] [--allow-webhook-subscribers/--no-webhook-subscribers] [--allow-rss/--no-rss] [--template <template>]
 
 # Delete a status page
 pngr pages delete <page-id> [--confirm]
+
+# Show page status, incidents, and components by domain
+pngr pages show <domain>
+
+# List the page templates available for 'pages create/update --template'
+pngr pages templates
 ```
 
 ### `pngr pages components`
-Manage status page components (nested under pages).
+🔧 Manage status page components
 
 ```bash
-# List components for a page
+# List components for a status page
 pngr pages components list --page-id <page-id>
 
-# Get specific component
+# Get specific component details
 pngr pages components get <component-id> --page-id <page-id>
 
-# Create component
-pngr pages components create --name <name> --page-id <page-id> [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase] [--only-if-degraded] [--start-date <YYYY-MM-DD>]
+# Create a new component
+pngr pages components create --name <name> --page-id <page-id> [--description <description>] [--status <status>] [--group-id <group-id>] [--position <position>] [--showcase] [--only-if-degraded] [--start-date <start-date>]
 
-# Update component
-pngr pages components update <component-id> --page-id <page-id> [--name <name>] [--description <desc>] [--status <status>] [--group-id <id>] [--position <num>] [--showcase/--no-showcase] [--only-if-degraded/--always-show]
+# Update an existing component
+pngr pages components update <component-id> --page-id <page-id> [--name <name>] [--description <description>] [--status <status>] [--group-id <group-id>] [--position <position>] [--showcase/--no-showcase] [--only-if-degraded/--always-show]
 
-# Delete component
+# Delete a component
 pngr pages components delete <component-id> --page-id <page-id> [--confirm]
 
-# Get component uptime
-pngr pages components uptime <component-id> --page-id <page-id> [--start <date>] [--end <date>]
+# Get uptime data for a specific component
+pngr pages components uptime <component-id> --page-id <page-id> [--start <start>] [--end <end>] [--verbose]
 
-# Get uptime for all components (bulk)
-pngr pages components uptime-bulk --page-id <page-id> [--start <date>] [--end <date>]
+# List the valid component statuses
+pngr pages components statuses
+
+# Show uptime % and outage time for all (or selected) components of a page
+pngr pages components uptime-report --page-id <page-id> [--component-id <component-ids>...] [--from <start>] [--to <end>] [--include-groups]
 ```
 
-### `pngr incidents`
-Manage incidents and maintenance.
+### `pngr pages component-groups`
+🗂  Manage component groups on a status page
 
 ```bash
-# List incidents
-pngr incidents list [--page-id <id>] [--page <num>] [--page-size <size>] [--status <status>]
+# List component groups with the components they contain
+pngr pages component-groups list --page-id <page-id>
 
-# Get specific incident
-pngr incidents get <incident-id> [--page-id <id>]
+# Show a component group and its member components
+pngr pages component-groups get <group-id> --page-id <page-id>
 
-# Create incident
-pngr incidents create --name <name> --body <text> --status <status> --impact <impact> [--page-id <id>]
+# Create a component group, optionally moving existing components into it
+pngr pages component-groups create --page-id <page-id> --name <name> [--description <description>] [--position <position>] [--component-id <component-ids>...]
 
-# Update incident
-pngr incidents update <incident-id> --name <name> --body <text> --status <status> --page-id <id>
+# Update a component group (PATCH) and/or change which components belong to it
+pngr pages component-groups update <group-id> --page-id <page-id> [--name <name>] [--description <description>] [--position <position>] [--add-component <add>...] [--remove-component <remove>...]
 
-# Delete incident
-pngr incidents delete <incident-id> [--page-id <id>] [--confirm]
+# Delete a component group (member components are kept and become ungrouped)
+pngr pages component-groups delete <group-id> --page-id <page-id> [--confirm]
+```
 
-# Manage incident updates
-pngr incidents updates list <incident-id> [--page-id <id>]
-pngr incidents updates create <incident-id> --body <text> --status <status> [--page-id <id>]
-pngr incidents updates get <incident-id> <update-id> [--page-id <id>]
-pngr incidents updates update <incident-id> <update-id> --body <text> [--page-id <id>]
-pngr incidents updates delete <incident-id> <update-id> [--page-id <id>] [--confirm]
+### `pngr pages incidents`
+🚨 Manage status page incidents
+
+```bash
+# List incidents for a status page
+pngr pages incidents list --page-id <page-id> [--component-id <component-id>] [--unresolved] [--maintenance]
+
+# Get specific incident details
+pngr pages incidents get <incident-id> --page-id <page-id> [--verbose]
+
+# Create a new incident
+pngr pages incidents create --name <name> --status <status> --page-id <page-id> [--body <body>] [--impact <impact>] [--components <components>] [--no-notifications]
+
+# Update an existing incident
+pngr pages incidents update <incident-id> --page-id <page-id> [--name <name>] [--status <status>] [--body <body>] [--impact <impact>] [--components <components>]
+
+# Delete an incident
+pngr pages incidents delete <incident-id> --page-id <page-id> [--confirm]
+
+# List unresolved incidents (not resolved)
+pngr pages incidents unresolved --page-id <page-id> [--component-id <component-id>]
+
+# List scheduled maintenance windows
+pngr pages incidents maintenance --page-id <page-id> [--component-id <component-id>]
+
+# Show valid incident statuses, maintenance statuses and impacts
+pngr pages incidents reference
+
+# Record an incident that already happened (with its timeline) so it shows in history and uptime
+pngr pages incidents log-past --page-id <page-id> --name <name> --impact <impact> [--started <started>] [--resolved <resolved>] [--body <body>] [--resolution <resolution>] [--component <component>...] [--updates-file <updates-file>] [--notify/--no-notify]
+
+# Schedule a maintenance window (status 'scheduled', impact 'maintenance')
+pngr pages incidents schedule-maintenance --page-id <page-id> --name <name> --start <start> --end <end> [--body <body>] [--component-id <component-ids>...] [--notify/--no-notify] [--auto-start/--no-auto-start] [--auto-complete/--no-auto-complete] [--auto-component-status/--no-auto-component-status] [--notify-transitions/--no-notify-transitions] [--remind/--no-remind] [--reminders <reminders>]
+```
+
+### `pngr pages incidents updates`
+🧾 Manage the update timeline of an incident
+
+```bash
+# List all updates of an incident (newest first)
+pngr pages incidents updates list <incident-id> --page-id <page-id>
+
+# Post a new update to an incident (changes its status, component statuses and notifies subscribers)
+pngr pages incidents updates add <incident-id> --page-id <page-id> [--status <status>] [--body <body>] [--component <component>...] [--notify/--no-notify]
+
+# Edit an existing update: fix its text, time or affected components (no notifications are sent)
+pngr pages incidents updates edit <incident-id> <update-id> --page-id <page-id> [--body <body>] [--posted-at <posted-at>] [--component <component>...] [--clear-components]
+
+# Delete an update (an incident must keep at least one update)
+pngr pages incidents updates delete <incident-id> <update-id> --page-id <page-id> [--confirm]
+```
+
+### `pngr pages incidents postmortem`
+📝 Write and publish incident postmortems
+
+```bash
+# Show the postmortem of an incident (published text and pending draft)
+pngr pages incidents postmortem get <incident-id> --page-id <page-id>
+
+# Create or replace the postmortem draft (publish separately)
+pngr pages incidents postmortem set <incident-id> --page-id <page-id> [--body <body>] [--file <file>] [--notify-subscribers/--no-notify-subscribers]
+
+# Publish the current draft on the status page
+pngr pages incidents postmortem publish <incident-id> --page-id <page-id> [--notify-subscribers/--no-notify-subscribers]
+```
+
+### `pngr pages passwords`
+🔑 Manage passwords of password-protected status pages
+
+```bash
+# List page passwords with their hints, state and expiry (passwords themselves are never shown)
+pngr pages passwords list --page-id <page-id>
+
+# Add a password (enables password protection on the page; max 10 passwords)
+pngr pages passwords add --page-id <page-id> [--password <password>] [--name <name>] [--hint <hint>] [--expires <expires>]
+
+# Update a password's value, label, hint, state or expiry
+pngr pages passwords update <password-id> --page-id <page-id> [--password <password>] [--name <name>] [--hint <hint>] [--active/--inactive] [--expires <expires>] [--no-expiry]
+
+# Delete a password (removing the last one turns password protection off)
+pngr pages passwords delete <password-id> --page-id <page-id> [--confirm]
+```
+
+### `pngr pages email-domain`
+✉️  Send notifications from your own email domain
+
+```bash
+# Show the sender domain, its verification status and the DNS records to create
+pngr pages email-domain show --page-id <page-id>
+
+# Register the sender email's domain with the mail provider and print the DNS records to add
+pngr pages email-domain setup --page-id <page-id> [--from-email <from-email>] [--from-name <from-name>]
+
+# Check the DNS records with the mail provider and refresh the verification status
+pngr pages email-domain verify --page-id <page-id>
 ```
 
 ## 📄 Check Configuration Files

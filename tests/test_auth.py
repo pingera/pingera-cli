@@ -12,16 +12,37 @@ from pingera_cli.main import app
 from pingera_cli.commands.auth import AuthCommand
 
 
+VALID_STATUS = "[green]✅ Valid[/green]"
+INVALID_STATUS = "[red]❌ Invalid or expired[/red]"
+
+
 class TestAuthCommand:
     """Test the AuthCommand class"""
+
+    @pytest.fixture(autouse=True)
+    def mock_key_validation(self):
+        """Avoid real network calls when login/status validate the API key"""
+        with patch.object(AuthCommand, '_validate_api_key', return_value=VALID_STATUS) as mock_validate:
+            yield mock_validate
+
+    def test_login_rejects_invalid_api_key(self, temp_config_dir, mock_api_key, mock_key_validation):
+        """Test login aborts without saving when the API rejects the key"""
+        mock_key_validation.return_value = INVALID_STATUS
+        runner = CliRunner()
+
+        with patch('pingera_cli.commands.auth.set_api_key') as mock_set_api_key:
+            result = runner.invoke(app, ['auth', 'login', '--api-key', mock_api_key])
+
+        assert result.exit_code == 1
+        assert "Please check your API key and try again" in result.stdout
+        mock_set_api_key.assert_not_called()
+        mock_key_validation.assert_called_once_with(mock_api_key)
 
     def test_login_with_api_key(self, temp_config_dir, mock_api_key):
         """Test login with API key provided"""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch('pingera_cli.utils.config.set_api_key', return_value=True):
-                result = runner.invoke(app, ['auth', 'login', '--api-key', mock_api_key])
+        result = runner.invoke(app, ['auth', 'login', '--api-key', mock_api_key])
 
         assert result.exit_code == 0
         assert "API key has been saved successfully" in result.stdout
@@ -40,7 +61,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch('pingera_cli.commands.auth.Prompt.ask', return_value=mock_api_key):
-            with patch('pingera_cli.utils.config.set_api_key', return_value=True):
+            with patch('pingera_cli.commands.auth.set_api_key', return_value=True):
                 result = runner.invoke(app, ['auth', 'login', '--interactive'])
 
         assert result.exit_code == 0
@@ -51,7 +72,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch('pingera_cli.commands.auth.Prompt.ask', return_value=mock_api_key):
-            with patch('pingera_cli.utils.config.set_api_key', return_value=True):
+            with patch('pingera_cli.commands.auth.set_api_key', return_value=True):
                 result = runner.invoke(app, ['auth', 'login', '--api-key', ''])
 
         assert result.exit_code == 0
@@ -62,7 +83,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch('pingera_cli.commands.auth.Prompt.ask', return_value=mock_api_key):
-            with patch('pingera_cli.utils.config.set_api_key', return_value=True):
+            with patch('pingera_cli.commands.auth.set_api_key', return_value=True):
                 result = runner.invoke(app, ['auth', 'login', '--api-key', '   '])
 
         assert result.exit_code == 0
@@ -83,7 +104,7 @@ class TestAuthCommand:
         runner = CliRunner()
         short_key = "123"
 
-        with patch('pingera_cli.utils.config.set_api_key', return_value=True):
+        with patch('pingera_cli.commands.auth.set_api_key', return_value=True):
             result = runner.invoke(app, ['auth', 'login', '--api-key', short_key])
 
         assert result.exit_code == 0  # Should still succeed but with warning
@@ -94,7 +115,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch.dict(os.environ, {'PINGERA_API_KEY': mock_api_key}):
-            with patch('pingera_cli.utils.config.get_api_key', return_value=mock_api_key):
+            with patch('pingera_cli.commands.auth.get_api_key', return_value=mock_api_key):
                 result = runner.invoke(app, ['auth', 'status'])
 
         assert result.exit_code == 0
@@ -106,7 +127,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch.dict(os.environ, {'PINGERA_API_KEY': mock_api_key}):
-            with patch('pingera_cli.utils.config.get_api_key', return_value=mock_api_key):
+            with patch('pingera_cli.commands.auth.get_api_key', return_value=mock_api_key):
                 result = runner.invoke(app, ['auth', 'status'])
 
         assert result.exit_code == 0
@@ -117,9 +138,8 @@ class TestAuthCommand:
         """Test status command when no API key is configured"""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch('pingera_cli.utils.config.get_api_key', return_value=None):
-                result = runner.invoke(app, ['auth', 'status'])
+        with patch('pingera_cli.commands.auth.get_api_key', return_value=None):
+            result = runner.invoke(app, ['auth', 'status'])
 
         assert result.exit_code == 0
         assert "Authentication Status" in result.stdout
@@ -129,10 +149,9 @@ class TestAuthCommand:
         """Test logout with confirmation"""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch('pingera_cli.utils.config.get_config', return_value={'api_key': 'test_key'}):
-                with patch('pingera_cli.utils.config.save_config', return_value=True):
-                    result = runner.invoke(app, ['auth', 'logout', '--confirm'])
+        with patch('pingera_cli.commands.auth.get_config', return_value={'api_key': 'test_key'}):
+            with patch('pingera_cli.commands.auth.save_config', return_value=True):
+                result = runner.invoke(app, ['auth', 'logout', '--confirm'])
 
         assert result.exit_code == 0
         assert "Credentials cleared from configuration file" in result.stdout
@@ -141,10 +160,9 @@ class TestAuthCommand:
         """Test logout when no credentials exist"""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch('pingera_cli.utils.config.get_config', return_value={}):
-                with patch('pingera_cli.utils.config.save_config', return_value=True):
-                    result = runner.invoke(app, ['auth', 'logout', '--confirm'])
+        with patch('pingera_cli.commands.auth.get_config', return_value={}):
+            with patch('pingera_cli.commands.auth.save_config', return_value=True):
+                result = runner.invoke(app, ['auth', 'logout', '--confirm'])
 
         assert result.exit_code == 0
         assert "No stored credentials found" in result.stdout
@@ -154,8 +172,8 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch.dict(os.environ, {'PINGERA_API_KEY': mock_api_key}):
-            with patch('pingera_cli.utils.config.get_config', return_value={'api_key': 'test_key'}):
-                with patch('pingera_cli.utils.config.save_config', return_value=True):
+            with patch('pingera_cli.commands.auth.get_config', return_value={'api_key': 'test_key'}):
+                with patch('pingera_cli.commands.auth.save_config', return_value=True):
                     result = runner.invoke(app, ['auth', 'logout', '--confirm'])
 
         assert result.exit_code == 0
@@ -209,9 +227,8 @@ class TestAuthCommand:
         with open(config_file, 'w') as f:
             f.write('invalid json content')
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch('pingera_cli.utils.config.get_api_key', return_value=None):
-                result = runner.invoke(app, ['auth', 'status'])
+        with patch('pingera_cli.commands.auth.get_api_key', return_value=None):
+            result = runner.invoke(app, ['auth', 'status'])
 
         # Should still work due to fallback to default config
         assert result.exit_code == 0
@@ -222,7 +239,7 @@ class TestAuthCommand:
         runner = CliRunner()
 
         with patch('pingera_cli.commands.auth.Prompt.ask', return_value=mock_api_key):
-            with patch('pingera_cli.utils.config.set_api_key', return_value=True):
+            with patch('pingera_cli.commands.auth.set_api_key', return_value=True):
                 # When no --api-key is provided and --interactive is not used,
                 # the command should still prompt for input
                 result = runner.invoke(app, ['auth', 'login'])

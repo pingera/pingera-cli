@@ -3,8 +3,13 @@ Base command class for PingeraCLI commands
 """
 
 import json
+import os
+from datetime import date, datetime
+from enum import Enum
 from typing import Any, Dict, Optional
-from datetime import datetime
+
+import click
+import typer
 
 try:
     import yaml
@@ -16,7 +21,55 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..utils.console import console, error_console
-from ..utils.config import get_config
+from ..utils.config import get_output_format
+
+
+def to_plain(obj: Any) -> Any:
+    """
+    Convert SDK models to plain data for output.
+
+    Generated to_dict() is meant for request bodies and drops read-only fields (id, status,
+    timestamps...), so dump the full pydantic model instead.
+    """
+    if isinstance(obj, list):
+        return [to_plain(o) for o in obj]
+    if hasattr(obj, 'model_dump'):
+        return obj.model_dump(by_alias=True, exclude_none=True, mode='json')
+    return obj
+
+
+def _json_default(obj: Any) -> Any:
+    """Serialize values json can't handle natively (datetimes, enums, SDK models)."""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Enum):
+        return obj.value
+    if hasattr(obj, 'model_dump'):
+        return to_plain(obj)
+    return str(obj)
+
+
+def format_api_error(error: Exception) -> str:
+    """Condense SDK ApiException output (status, reason, headers, body) into the server's message."""
+    try:
+        from pingera.exceptions import ApiException
+    except ImportError:  # pragma: no cover
+        return str(error)
+    if isinstance(error, ApiException):
+        message = None
+        body = getattr(error, 'body', None)
+        if body:
+            try:
+                parsed = json.loads(body)
+                if isinstance(parsed, dict):
+                    message = parsed.get('message') or parsed.get('error') or parsed.get('errors')
+                    if isinstance(message, (dict, list)):
+                        message = json.dumps(message)
+            except (ValueError, TypeError):
+                message = str(body)[:300]
+        status = f"HTTP {error.status}" if getattr(error, 'status', None) else "API error"
+        return f"{status}: {message}" if message else f"{status} {error.reason or ''}".strip()
+    return str(error)
 
 
 class BaseCommand:
@@ -25,7 +78,41 @@ class BaseCommand:
     def __init__(self, output_format: Optional[str] = None):
         self.console = console
         self.error_console = error_console
-        self.output_format = output_format or get_config().get('output_format', 'table')
+        self.output_format = output_format or get_output_format()
+
+    @property
+    def _status_console(self) -> Console:
+        """Console for human-oriented status panels; stderr in json/yaml mode to keep stdout parseable."""
+        return self.error_console if self.output_format in ('json', 'yaml') else self.console
+
+    def api(self, api_cls):
+        """Instantiate an SDK API class (e.g. pingera.api.AlertsApi) with configured auth and base URL."""
+        from ..utils.config import get_api_key, get_config
+
+        api_key = get_api_key()
+        if not api_key:
+            self.display_error("API key not found. Use 'pngr auth login --api-key <key>' to set it.")
+            raise typer.Exit(1)
+
+        from pingera import ApiClient, Configuration
+
+        configuration = Configuration()
+        configuration.host = get_config().get('base_url', 'https://api.pingera.ru')
+        configuration.api_key['apiKeyAuth'] = api_key
+        return api_cls(ApiClient(configuration))
+
+    def fail(self, action: str, error: Exception):
+        """Show a readable API/validation error and exit with status 1."""
+        self.display_error(f"Failed to {action}: {format_api_error(error)}")
+        raise typer.Exit(1)
+
+    def output_model(self, obj: Any):
+        """Emit an SDK model (or list of models) as JSON/YAML."""
+        self.output_data(to_plain(obj))
+
+    @property
+    def machine_output(self) -> bool:
+        return self.output_format in ('json', 'yaml')
 
     def validate_api_key(self) -> str:
         """
@@ -69,7 +156,7 @@ class BaseCommand:
             border_style="green",
             padding=(1, 2),
         )
-        self.console.print(panel)
+        self._status_console.print(panel)
 
     def display_error(self, message: str, title: str = "❌ Error"):
         """
@@ -95,7 +182,7 @@ class BaseCommand:
             border_style="yellow",
             padding=(1, 2),
         )
-        self.console.print(panel)
+        self._status_console.print(panel)
 
     def display_info(self, message: str, title: str = "ℹ️ Info"):
         """Display an info message in a panel"""
@@ -105,7 +192,7 @@ class BaseCommand:
             border_style="blue",
             padding=(1, 2),
         )
-        self.console.print(panel)
+        self._status_console.print(panel)
 
     def create_table(self, title: str, columns: list, rows: list) -> Table:
         """
@@ -167,41 +254,16 @@ class BaseCommand:
         output_format = format_override or self.output_format
 
         if output_format == 'json':
-            from datetime import datetime
-
-            def json_serializer(obj):
-                """JSON serializer for datetime objects"""
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-            self.console.print(json.dumps(data, indent=2, default=json_serializer))
+            # Raw stdout: rich would wrap long lines and interpret [markup], breaking machine-readable output
+            click.echo(json.dumps(data, indent=2, default=_json_default, ensure_ascii=False))
         elif output_format == 'yaml':
             if yaml is None:
-                self.console.print("[yellow]YAML support not available. Install with: pip install pyyaml[/yellow]")
-                from datetime import datetime
-
-                def json_serializer(obj):
-                    """JSON serializer for datetime objects"""
-                    if isinstance(obj, datetime):
-                        return obj.isoformat()
-                    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-                self.console.print(json.dumps(data, indent=2, default=json_serializer))
+                self.error_console.print("[yellow]YAML support not available. Install with: pip install pyyaml[/yellow]")
+                click.echo(json.dumps(data, indent=2, default=_json_default, ensure_ascii=False))
             else:
-                try:
-                    self.console.print(yaml.dump(data, default_flow_style=False))
-                except Exception:
-                    # Fallback to JSON if YAML fails
-                    from datetime import datetime
-
-                    def json_serializer(obj):
-                        """JSON serializer for datetime objects"""
-                        if isinstance(obj, datetime):
-                            return obj.isoformat()
-                        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-                    self.console.print(json.dumps(data, indent=2, default=json_serializer))
+                # Round-trip through JSON so datetimes, enums and SDK models become plain YAML scalars
+                plain = json.loads(json.dumps(data, default=_json_default))
+                click.echo(yaml.safe_dump(plain, default_flow_style=False, sort_keys=False, allow_unicode=True), nl=False)
         else:
             # Default to table format - subclasses should override this
             if isinstance(data, dict):

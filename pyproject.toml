@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "pingera-cli"
 dynamic = ["version"]
 description = "A beautiful Python CLI tool built with typer and rich, distributed via pip and based on Pingera SDK"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Pingera Team", email = "privet@pingera.ru"},
 ]
@@ -19,24 +20,24 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Networking",
     "Topic :: Utilities",
     "Environment :: Console",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 dependencies = [
     "typer[all]>=0.9.0",
     "rich>=13.0.0",
-    "pingera-sdk>=1.0.15",
+    "pingera-sdk>=1.1.0,<2",
     "click>=8.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -58,14 +59,14 @@ Repository = "https://github.com/pingera/pingera-cli"
 pngr = "pingera_cli.main:cli_entry_point"
 
 [tool.setuptools]
-packages = ["pingera_cli", "pingera_cli.commands", "pingera_cli.utils"]
+packages = ["pingera_cli", "pingera_cli.commands", "pingera_cli.formatters", "pingera_cli.utils"]
 
-[tool.setuptools_scm]
-write_to = "pingera_cli/_version.py"
+[tool.setuptools.dynamic]
+version = {attr = "pingera_cli.__version__"}
 
 [tool.black]
 line-length = 100
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -83,7 +84,7 @@ exclude = '''
 '''
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -97,7 +98,7 @@ warn_no_return = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = "pingera_sdk.*"
+module = "pingera.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

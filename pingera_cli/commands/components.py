@@ -47,6 +47,8 @@ class ComponentsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -115,6 +117,8 @@ class ComponentsCommand(BaseCommand):
                 self.console.print(table)
                 self.console.print(f"\n[dim]Found {len(response)} components[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list components: {str(e)}")
             raise typer.Exit(1)
@@ -176,6 +180,8 @@ class ComponentsCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get component: {str(e)}")
             raise typer.Exit(1)
@@ -228,11 +234,17 @@ class ComponentsCommand(BaseCommand):
                 f"Status: {status or 'operational'}"
             ]
 
+            if self.machine_output:
+                self.output_model(component)
+                return
+
             self.display_success(
                 f"Component '{name}' created successfully!\n" + "\n".join(success_details),
                 "✅ Component Created"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to create component: {str(e)}")
             raise typer.Exit(1)
@@ -282,11 +294,17 @@ class ComponentsCommand(BaseCommand):
                 component1=component_data
             )
 
+            if self.machine_output:
+                self.output_model(component)
+                return
+
             self.display_success(
                 f"Component '{component_id}' updated successfully!",
                 "✅ Component Updated"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update component: {str(e)}")
             raise typer.Exit(1)
@@ -305,11 +323,17 @@ class ComponentsCommand(BaseCommand):
                 component_id=component_id
             )
 
+            if self.machine_output:
+                self.output_data({"deleted": True, "id": component_id})
+                return
+
             self.display_success(
                 f"Component {component_id} deleted successfully!",
                 "✅ Component Deleted"
             )
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to delete component: {str(e)}")
             raise typer.Exit(1)
@@ -318,22 +342,21 @@ class ComponentsCommand(BaseCommand):
         """Get uptime data for a specific component"""
         try:
             components_api = self.get_client()
-            
-            # Build parameters
-            params = {}
-            if start:
-                params['start'] = start
-            if end:
-                params['end'] = end
-            
-            # Make API call
-            uptime_data = components_api.v1_pages_page_id_components_component_id_uptime_get(
-                page_id=page_id,
-                component_id=component_id,
-                **params
-            )
 
-            print(f"##### {uptime_data}")
+            if start or end:
+                # The SDK method has no start/end params; the API reads them from the query string.
+                from pingera.models import ComponentUptime
+                from .status_page_common import raw_json
+                raw = raw_json(
+                    components_api, "v1_pages_page_id_components_component_id_uptime_get",
+                    query={"start": start, "end": end}, page_id=page_id, component_id=component_id,
+                )
+                uptime_data = ComponentUptime.from_dict(raw) if isinstance(raw, dict) else None
+            else:
+                uptime_data = components_api.v1_pages_page_id_components_component_id_uptime_get(
+                    page_id=page_id,
+                    component_id=component_id,
+                )
 
             # Check if we got valid data
             if uptime_data is None:
@@ -428,12 +451,16 @@ class ComponentsCommand(BaseCommand):
 
                 self.console.print(panel)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get component uptime: {str(e)}")
             raise typer.Exit(1)
 
     # Create Typer app for components commands
 app = typer.Typer(name="components", help="🔧 Manage status page components", no_args_is_help=True)
+
+from .status_page_common import COMPONENT_STATUSES  # noqa: E402
 
 
 @app.command("list")
@@ -462,7 +489,7 @@ def create_component(
     name: str = typer.Option(..., "--name", "-n", help="Component name"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     description: Optional[str] = typer.Option(None, "--description", "-d", help="Component description"),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="Component status (operational, degraded_performance, partial_outage, major_outage)"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help=f"Component status: {', '.join(COMPONENT_STATUSES)} (default: operational)"),
     group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Component group ID"),
     position: Optional[int] = typer.Option(None, "--position", help="Display position"),
     showcase: bool = typer.Option(False, "--showcase", help="Prominently display on status page"),
@@ -491,7 +518,7 @@ def update_component(
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Component name"),
     description: Optional[str] = typer.Option(None, "--description", "-d", help="Component description"),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="Component status"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help=f"Component status: {', '.join(COMPONENT_STATUSES)}"),
     group_id: Optional[str] = typer.Option(None, "--group-id", "-g", help="Component group ID"),
     position: Optional[int] = typer.Option(None, "--position", help="Display position"),
     showcase: Optional[bool] = typer.Option(None, "--showcase/--no-showcase", help="Prominently display on status page"),
@@ -529,11 +556,16 @@ def delete_component(
 def get_component_uptime(
     component_id: str = typer.Argument(..., help="Component ID to get uptime for"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
-    start: Optional[str] = typer.Option(None, "--start", help="Start date (YYYY-MM-DD or ISO 8601)"),
-    end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD or ISO 8601)"),
+    start: Optional[str] = typer.Option(None, "--start", help="Start date (YYYY-MM-DD, YYYY-MM or YYYY). Default: 90 days ago"),
+    end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD, YYYY-MM or YYYY). Default: today"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information including event IDs"),
 ):
     """Get uptime data for a specific component"""
     from ..utils.config import get_output_format
     components_cmd = ComponentsCommand(get_output_format(), verbose=verbose)
     components_cmd.get_component_uptime(page_id, component_id, start, end)
+
+
+from . import component_extras  # noqa: E402
+
+component_extras.register(app)

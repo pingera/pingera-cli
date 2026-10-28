@@ -4,14 +4,46 @@ Pytest configuration and shared fixtures
 
 import pytest
 import os
+import shutil
 import tempfile
 import json
 from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 from pathlib import Path
 
-from pingera_cli.main import app
-from pingera_cli.utils.config import get_config_path
+# Importing the CLI instantiates commands that read the config file, so isolate the
+# config location before any pingera_cli import (i.e. during test collection too).
+_ORIGINAL_ENV = {key: os.environ.get(key) for key in ('XDG_CONFIG_HOME', 'PINGERA_API_KEY')}
+_SESSION_XDG_DIR = tempfile.mkdtemp(prefix='pngr-test-xdg-')
+os.environ['XDG_CONFIG_HOME'] = _SESSION_XDG_DIR
+os.environ.pop('PINGERA_API_KEY', None)
+
+
+def pytest_unconfigure(config):
+    for key, value in _ORIGINAL_ENV.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    shutil.rmtree(_SESSION_XDG_DIR, ignore_errors=True)
+
+
+from pingera_cli.main import app  # noqa: E402
+from pingera_cli.commands.auth import AuthCommand  # noqa: E402
+from pingera_cli.utils import config as config_module  # noqa: E402
+from pingera_cli.utils.config import get_config_path  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def isolate_user_config(tmp_path, monkeypatch):
+    """Keep tests away from the real user config and environment."""
+    xdg_dir = tmp_path / 'xdg-config'
+    xdg_dir.mkdir()
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(xdg_dir))
+    monkeypatch.delenv('PINGERA_API_KEY', raising=False)
+    config_module.set_runtime_overrides()
+    yield
+    config_module.set_runtime_overrides()
 
 
 @pytest.fixture
@@ -21,15 +53,30 @@ def cli_runner():
 
 
 @pytest.fixture
+def sdk_apis(monkeypatch):
+    """
+    Patch BaseCommand.api so commands get one Mock per SDK API class.
+
+    Usage: sdk_apis['AlertsApi'].v1_alerts_get.return_value = ...
+    """
+    from collections import defaultdict
+    from pingera_cli.commands.base import BaseCommand
+
+    monkeypatch.setenv('PINGERA_API_KEY', 'test_api_key_1234567890abcdef')
+    apis = defaultdict(Mock)
+    monkeypatch.setattr(BaseCommand, 'api', lambda self, api_cls: apis[api_cls.__name__])
+    return apis
+
+
+@pytest.fixture
 def mock_api_key():
     """Mock API key for testing"""
     return "test_api_key_1234567890abcdef"
 
 @pytest.fixture
 def mock_auth_sdk():
-    """Mock SDK for authentication testing only"""
-    with patch('pingera_cli.commands.auth.validate_api_key') as mock_validate:
-        mock_validate.return_value = True
+    """Mock API key validation for authentication testing only"""
+    with patch.object(AuthCommand, '_validate_api_key', return_value="[green]✅ Valid[/green]") as mock_validate:
         yield mock_validate
 
 

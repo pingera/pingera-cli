@@ -9,6 +9,18 @@ from typing import Dict, Any, Optional
 
 from .console import console, error_console
 
+VALID_OUTPUT_FORMATS = ('table', 'json', 'yaml')
+
+# Per-invocation settings from global CLI flags (e.g. --output, --verbose).
+# They take precedence over the config file and are never persisted.
+_runtime_overrides: Dict[str, Any] = {}
+
+
+def set_runtime_overrides(**overrides: Any) -> None:
+    """Replace per-invocation overrides; None values are ignored."""
+    _runtime_overrides.clear()
+    _runtime_overrides.update({k: v for k, v in overrides.items() if v is not None})
+
 
 def get_config_path() -> Path:
     """
@@ -83,6 +95,8 @@ def save_config(config: Dict[str, Any]) -> bool:
         bool: True if saved successfully, False otherwise
     """
     config_path = get_config_path()
+    # config_path is derived at runtime, not a setting
+    config = {k: v for k, v in config.items() if k != 'config_path'}
 
     try:
         with open(config_path, 'w') as f:
@@ -139,7 +153,7 @@ def set_output_format(output_format: str) -> bool:
     Returns:
         bool: True if saved successfully, False otherwise
     """
-    if output_format not in ['table', 'json', 'yaml']:
+    if output_format not in VALID_OUTPUT_FORMATS:
         return False
 
     config = get_config()
@@ -149,11 +163,13 @@ def set_output_format(output_format: str) -> bool:
 
 def get_output_format() -> str:
     """
-    Get output format from configuration
+    Get output format from the --output flag or configuration
 
     Returns:
         str: Output format (default: table)
     """
+    if 'output_format' in _runtime_overrides:
+        return _runtime_overrides['output_format']
     config = get_config()
     return config.get('output_format', 'table')
 
@@ -175,11 +191,13 @@ def set_verbose_mode(verbose: bool) -> bool:
 
 def get_verbose_mode() -> bool:
     """
-    Get verbose mode from configuration
+    Get verbose mode from the --verbose flag or configuration
 
     Returns:
         bool: Verbose mode flag (default: False)
     """
+    if 'verbose' in _runtime_overrides:
+        return _runtime_overrides['verbose']
     config = get_config()
     return config.get('verbose', False)
 
@@ -198,11 +216,14 @@ def validate_config() -> Dict[str, bool]:
         'pingera_sdk_available': True,
     }
 
-    # Test config file readability
-    try:
-        get_config()
-    except Exception:
-        results['config_file_readable'] = False
+    # Test config file readability (get_config() swallows errors, so parse directly)
+    config_path = get_config_path()
+    if config_path.exists():
+        try:
+            with open(config_path, 'r') as f:
+                json.load(f)
+        except (OSError, ValueError):
+            results['config_file_readable'] = False
 
     # Test Pingera SDK availability
     try:

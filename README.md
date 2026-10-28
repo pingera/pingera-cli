@@ -10,7 +10,7 @@ A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - bui
 
 - **Beautiful Terminal Output**: Powered by Rich library for colorful, formatted output
 - **Modern CLI Interface**: Built with Typer for intuitive command-line interactions  
-- **Pingera Platform Integration**: Seamlessly integrates with Pingera SDK for managing and running checks (statuspages and other coming soon)
+- **Pingera Platform Integration**: Manage checks, uptime and performance analytics, alert rules and channels, and status pages (components, incidents, maintenance, postmortems) through the Pingera SDK
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 - **Easy Installation**: Simple pip install with all dependencies managed
 - **Configuration Management**: Flexible configuration with environment variables and config files
@@ -18,11 +18,13 @@ A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - bui
 
 ## 🚀 Installation
 
-Install Pingera Platform CLI using pip:
+Install Pingera Platform CLI using pip (requires Python 3.10+):
 
 ```bash
 pip install pingera-cli
 ```
+
+The CLI is built on [pingera-sdk](https://pypi.org/project/pingera-sdk/) 1.1+, which is installed automatically.
 
 ## 🔐 Authentication
 
@@ -64,9 +66,31 @@ pngr checks create \
   --interval 300
 ```
 
+### Schedule a check with cron
+```bash
+# Run on weekdays at 09:00 instead of a fixed interval
+pngr checks create --name "Morning check" --type web --url https://example.com --cron "0 9 * * 1-5"
+
+# Switch an existing check between cron and interval scheduling
+pngr checks update <check-id> --cron "*/15 * * * *"
+pngr checks update <check-id> --interval 300
+```
+
 ### Get check results
 ```bash
 pngr checks results <check-id>
+```
+
+### Uptime and performance
+```bash
+# Uptime over the last 7 days, with hour-by-hour detail
+pngr checks uptime <check-id> --from 7d --hourly
+
+# p95/p99 response times per region
+pngr checks response-times <check-id> --from 24h
+
+# Success rate per region across all checks
+pngr checks stats --from 7d
 ```
 
 ### Run an on-demand check
@@ -94,6 +118,32 @@ pngr checks assign-group check_123 --group-id group_456
 # Remove a check from its group
 pngr checks assign-group check_123 --group-id null
 ```
+
+### Alerts
+```bash
+# Create a notification channel and a rule that alerts after 3 consecutive failures
+pngr alerts channels create --name "On-call" --email oncall@example.com
+pngr alerts rules create --name "API down" --check <check-id> --count 3 --channel <channel-id>
+
+# See what is firing and acknowledge it
+pngr alerts list --status firing
+pngr alerts ack <alert-id>
+```
+
+### Status pages
+```bash
+# Post an incident and follow-up updates
+pngr pages incidents create --page-id <page-id> --name "API errors" --status investigating --impact major
+pngr pages incidents updates add <incident-id> --page-id <page-id> --status resolved --body "Fixed"
+
+# Schedule maintenance
+pngr pages incidents schedule-maintenance --page-id <page-id> --name "DB upgrade" --start +24h --end +26h
+
+# Component uptime for the whole page
+pngr pages components uptime-report --page-id <page-id> --from 2026-01-01
+```
+
+See [docs/cli-commands.md](docs/cli-commands.md) for the full command reference.
 
 ### Secrets Management
 
@@ -123,14 +173,17 @@ pngr checks list-regions --check-type web
 
 ## 🔧 Configuration
 
-The CLI stores configuration in `~/.config/pingera-cli/config.json`. You can manage settings with:
+The CLI stores configuration in `~/.config/pingera-cli/config.json` (or `$XDG_CONFIG_HOME/pingera-cli/config.json`). You can manage settings with:
 
 ```bash
 # Show current configuration
-pngr config show
+pngr config --show
 
-# Set default output format
-pngr config set output_format json
+# Set the default output format
+pngr config --output-format json
+
+# Point the CLI at a different API endpoint
+pngr config --base-url https://api.pingera.ru
 ```
 
 ## 📊 Output Formats
@@ -141,13 +194,17 @@ The CLI supports multiple output formats:
 - **json**: JSON format for scripting
 - **yaml**: YAML format
 
+`--output`/`-o` is a global option, so it goes before the command. It applies to that invocation only; use `pngr config --output-format` to change the default.
+
 ```bash
 # JSON output
-pngr checks list --output json
+pngr -o json checks list
 
-# YAML output  
-pngr checks list --output yaml
+# YAML output
+pngr -o yaml checks list
 ```
+
+In `json`/`yaml` mode, stdout contains only the data, and status messages go to stderr, so output can be piped safely (for example, `pngr -o json checks list | jq '.checks[].id'`).
 
 ## 🌐 Platform Links
 

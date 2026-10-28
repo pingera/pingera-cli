@@ -25,12 +25,14 @@ from pingera_cli.utils.config import (
 class TestConfig:
     """Test configuration utilities"""
     
-    def test_get_config_path_default(self):
-        """Test default config path"""
-        with patch.dict(os.environ, {}, clear=True):
+    def test_get_config_path_default(self, tmp_path, monkeypatch):
+        """Test default config path (~/.config) when XDG_CONFIG_HOME is unset"""
+        monkeypatch.delenv('XDG_CONFIG_HOME', raising=False)
+        # Point the home directory at tmp_path so the real ~/.config is never touched
+        with patch('pingera_cli.utils.config.Path.home', return_value=tmp_path):
             config_path = get_config_path()
-            expected_path = Path.home() / '.config' / 'pingera-cli' / 'config.json'
-            assert config_path == expected_path
+        expected_path = tmp_path / '.config' / 'pingera-cli' / 'config.json'
+        assert config_path == expected_path
 
     def test_get_config_path_xdg(self, tmp_path):
         """Test config path with XDG_CONFIG_HOME"""
@@ -127,8 +129,7 @@ class TestConfig:
         with open(config_file, 'w') as f:
             json.dump(config_data, f)
         
-        with patch.dict(os.environ, {}, clear=True), \
-             patch('pingera_cli.utils.config.get_config_path', return_value=config_file):
+        with patch('pingera_cli.utils.config.get_config_path', return_value=config_file):
             api_key = get_api_key()
             assert api_key == 'config_api_key'
 
@@ -140,8 +141,7 @@ class TestConfig:
         with open(config_file, 'w') as f:
             json.dump(config_data, f)
         
-        with patch.dict(os.environ, {}, clear=True), \
-             patch('pingera_cli.utils.config.get_config_path', return_value=config_file):
+        with patch('pingera_cli.utils.config.get_config_path', return_value=config_file):
             api_key = get_api_key()
             assert api_key is None
 
@@ -237,8 +237,7 @@ class TestConfig:
         with open(config_file, 'w') as f:
             json.dump(config_data, f)
         
-        with patch('pingera_cli.utils.config.get_config_path', return_value=config_file), \
-             patch.dict(os.environ, {}, clear=True):
+        with patch('pingera_cli.utils.config.get_config_path', return_value=config_file):
             
             validation = validate_config()
             

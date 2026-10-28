@@ -36,6 +36,8 @@ class OnDemandChecksCommand(BaseCommand):
             
             return load_check_file(file_path)
             
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(str(e))
             raise typer.Exit(1)
@@ -63,6 +65,8 @@ class OnDemandChecksCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -280,6 +284,8 @@ class OnDemandChecksCommand(BaseCommand):
                         "✅ Check Queued"
                     )
             
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to execute custom check: {str(e)}")
             raise typer.Exit(1)
@@ -310,6 +316,8 @@ class OnDemandChecksCommand(BaseCommand):
                         "✅ Check Executed"
                     )
             
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to execute existing check: {str(e)}")
             raise typer.Exit(1)
@@ -421,11 +429,11 @@ class OnDemandChecksCommand(BaseCommand):
                     
                     table.add_row(
                         str(job.id) if job.id else "-",
-                        name,
-                        check_type,
-                        target,
+                        str(name),
+                        str(check_type),
+                        str(target),
                         status_display,
-                        job.job_type if hasattr(job, 'job_type') and job.job_type else "-",
+                        str(job.job_type) if hasattr(job, 'job_type') and job.job_type else "-",
                         job.created_at.strftime("%Y-%m-%d %H:%M") if hasattr(job, 'created_at') and job.created_at else "Unknown"
                     )
                 
@@ -447,6 +455,8 @@ class OnDemandChecksCommand(BaseCommand):
                 self.console.print(f"\n[dim]💡 For detailed job information, use: [white]pngr checks jobs status <job_id>[/white][/dim]")
                 self.console.print(f"[dim]💡 For detailed result information, use: [white]pngr checks results --result-id <result_id>[/white][/dim]")
             
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list jobs: {str(e)}")
             raise typer.Exit(1)
@@ -478,6 +488,8 @@ class OnDemandChecksCommand(BaseCommand):
                 # Rich formatted detailed view - fetch and display with results
                 self._fetch_and_display_job_result(job_id, job_status, verbose=self.verbose)
             
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to get job status: {str(e)}")
             raise typer.Exit(1)
@@ -585,6 +597,8 @@ class OnDemandChecksCommand(BaseCommand):
                     # Fallback to job status display
                     self._display_detailed_job_status(job_status, job_id)
                     
+        except typer.Exit:
+            raise
         except Exception as e:
             # Fallback to job status display on error
             self.display_warning(f"Could not fetch detailed results: {str(e)}")
@@ -944,6 +958,8 @@ class OnDemandChecksCommand(BaseCommand):
                     time.sleep(poll_interval)
                     elapsed_time += poll_interval
                     
+                except typer.Exit:
+                    raise
                 except Exception as e:
                     if self.output_format in ['json', 'yaml']:
                         self.output_data({
@@ -981,10 +997,7 @@ app.add_typer(run_app)
 app.add_typer(jobs_app)
 
 
-def get_output_format():
-    """Get output format from config"""
-    from ..utils.config import get_config
-    return get_config().get('output_format', 'table')
+from ..utils.config import get_output_format  # noqa: E402
 
 
 def get_verbose_mode():

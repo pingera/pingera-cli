@@ -11,7 +11,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.prompt import Confirm
 
-from .base import BaseCommand
+from .base import BaseCommand, to_plain
 from ..utils.config import get_api_key, get_output_format
 from ..utils.console import console
 
@@ -47,6 +47,8 @@ class CheckSecretsCommand(BaseCommand):
         except ImportError:
             self.display_error("Pingera SDK not installed. Install with: pip install pingera-sdk")
             raise typer.Exit(1)
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to initialize client: {str(e)}")
             raise typer.Exit(1)
@@ -62,7 +64,7 @@ class CheckSecretsCommand(BaseCommand):
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
                 # Convert to dict for JSON/YAML output
-                secrets_data = [secret.to_dict() for secret in secrets]
+                secrets_data = [to_plain(secret) for secret in secrets]
                 self.output_data({
                     'check_id': check_id,
                     'secrets': secrets_data,
@@ -95,6 +97,8 @@ class CheckSecretsCommand(BaseCommand):
                 console.print(table)
                 console.print(f"\n[dim]Found {len(secrets)} secret associations[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to list check secrets: {str(e)}")
             raise typer.Exit(1)
@@ -118,7 +122,7 @@ class CheckSecretsCommand(BaseCommand):
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
-                self.output_data(created_association.to_dict())
+                self.output_data(to_plain(created_association))
             else:
                 self.display_success(
                     f"Secret '{secret_id}' successfully associated with check '{check_id}' as environment variable '{env_variable}'"
@@ -137,6 +141,8 @@ class CheckSecretsCommand(BaseCommand):
 
                 console.print(table)
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to add secret to check: {str(e)}")
             raise typer.Exit(1)
@@ -167,6 +173,8 @@ class CheckSecretsCommand(BaseCommand):
             else:
                 self.display_success(f"Secret '{secret_id}' removed from check '{check_id}'")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to remove secret from check: {str(e)}")
             raise typer.Exit(1)
@@ -193,7 +201,7 @@ class CheckSecretsCommand(BaseCommand):
             
             # Handle different output formats
             if self.output_format in ['json', 'yaml']:
-                associations_data = [assoc.to_dict() for assoc in updated_associations]
+                associations_data = [to_plain(assoc) for assoc in updated_associations]
                 self.output_data({
                     'check_id': check_id,
                     'secrets': associations_data,
@@ -220,6 +228,8 @@ class CheckSecretsCommand(BaseCommand):
                 else:
                     console.print("[dim]No associations remaining[/dim]")
 
+        except typer.Exit:
+            raise
         except Exception as e:
             self.display_error(f"Failed to update check secrets: {str(e)}")
             raise typer.Exit(1)
