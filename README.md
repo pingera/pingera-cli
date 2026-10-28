@@ -172,6 +172,16 @@ pngr --help
 python -m pytest tests/
 ```
 
+### Releasing
+
+Bump `__version__` in `pingera_cli/__init__.py`, merge to `main`, then push a matching tag:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The [release workflow](.github/workflows/release.yml) runs the tests, builds the package, publishes it to PyPI (Trusted Publishing) and creates a GitHub release.
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
