@@ -343,20 +343,12 @@ class ComponentsCommand(BaseCommand):
         try:
             components_api = self.get_client()
 
-            if start or end:
-                # The SDK method has no start/end params; the API reads them from the query string.
-                from pingera.models import ComponentUptime
-                from .status_page_common import raw_json
-                raw = raw_json(
-                    components_api, "v1_pages_page_id_components_component_id_uptime_get",
-                    query={"start": start, "end": end}, page_id=page_id, component_id=component_id,
-                )
-                uptime_data = ComponentUptime.from_dict(raw) if isinstance(raw, dict) else None
-            else:
-                uptime_data = components_api.v1_pages_page_id_components_component_id_uptime_get(
-                    page_id=page_id,
-                    component_id=component_id,
-                )
+            uptime_data = components_api.v1_pages_page_id_components_component_id_uptime_get(
+                page_id=page_id,
+                component_id=component_id,
+                start=start,
+                end=end,
+            )
 
             # Check if we got valid data
             if uptime_data is None:

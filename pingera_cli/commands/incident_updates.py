@@ -22,7 +22,6 @@ from .status_page_common import (
     iso,
     parse_component_statuses,
     parse_past_time,
-    raw_json,
     styled,
     text,
     truncate,
@@ -41,16 +40,16 @@ class IncidentUpdatesCommand(BaseCommand):
 
     def list_updates(self, page_id: str, incident_id: str):
         try:
-            data = raw_json(self._api(), "v1_pages_page_id_incidents_incident_id_incident_updates_get",
-                            page_id=page_id, incident_id=incident_id)
+            updates = self._api().v1_pages_page_id_incidents_incident_id_incident_updates_get(
+                page_id=page_id, incident_id=incident_id
+            ) or []
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("list incident updates", e)
 
-        updates = [as_dict(u) for u in as_list(data)]
         if self.machine_output:
-            self.output_data(updates)
+            self.output_model(updates)
             return
         if not updates:
             self.display_info(f"Incident {incident_id} has no updates.")
@@ -64,15 +63,15 @@ class IncidentUpdatesCommand(BaseCommand):
         table.add_column("Components")
         table.add_column("Message")
         for update in updates:
-            components = component_status_map(update.get("components"))
-            notified = update.get("deliver_notifications")
+            components = component_status_map(update.components)
+            notified = update.deliver_notifications
             table.add_row(
-                text(update.get("id")),
-                format_dt(update.get("created_at")),
-                styled(update.get("status")),
+                text(update.id),
+                format_dt(update.created_at),
+                styled(update.status),
                 "✓" if notified is True else "✗" if notified is False else "-",
                 "\n".join(f"{cid}: {styled(st)}" for cid, st in components.items()) or "[dim]-[/dim]",
-                truncate(update.get("body"), 70),
+                truncate(update.body, 70),
             )
         self.console.print(table)
         self.console.print(f"[dim]{len(updates)} update(s)[/dim]")
@@ -121,8 +120,7 @@ class IncidentUpdatesCommand(BaseCommand):
         if components is not None:
             payload["components"] = components
         try:
-            data = raw_json(
-                self._api(), "v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch",
+            update = self._api().v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch(
                 page_id=page_id, incident_id=incident_id, incident_update_id=update_id, incident_update_edit=payload,
             )
         except typer.Exit:
@@ -130,13 +128,12 @@ class IncidentUpdatesCommand(BaseCommand):
         except Exception as e:
             self.fail("edit incident update", e)
 
-        update = as_dict(data)
         if self.machine_output:
-            self.output_data(update)
+            self.output_model(update)
             return
-        lines = [f"Update ID: {text(update.get('id'), update_id)}", "Changed: " + ", ".join(payload)]
-        if update.get("created_at"):
-            lines.append(f"Posted at: {format_dt(update.get('created_at'), '%Y-%m-%d %H:%M:%S')} UTC")
+        lines = [f"Update ID: {text(update.id, update_id)}", "Changed: " + ", ".join(payload)]
+        if update.created_at:
+            lines.append(f"Posted at: {format_dt(update.created_at, '%Y-%m-%d %H:%M:%S')} UTC")
         self.display_success("\n".join(lines), "✅ Update Edited")
 
     def delete_update(self, page_id: str, incident_id: str, update_id: str, confirm: bool):

@@ -4,7 +4,6 @@ Tests for `pngr alerts` (fired alerts), `pngr alerts rules` and `pngr alerts cha
 
 import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock
 
 import pytest
 from pingera.models import (
@@ -13,17 +12,13 @@ from pingera.models import (
     AlertChannelTestDelivery,
     AlertChannelTestResult,
     AlertList,
+    AlertNotification,
+    AlertRule,
     AlertStats,
 )
 
 from pingera_cli.commands.alert_common import channel_target, mask_config, mask_url, parse_seconds
 from pingera_cli.main import app
-
-
-def raw(data, status=200):
-    """Fake urllib3 response returned by the SDK *_without_preload_content methods."""
-    return Mock(status=status, reason="OK" if status < 400 else "ERR",
-                data=json.dumps(data).encode() if data is not None else b"")
 
 
 def alert(alert_id="al1", status="firing", fired_at=None, **kw):
@@ -32,12 +27,11 @@ def alert(alert_id="al1", status="firing", fired_at=None, **kw):
                  fired_at=fired_at or datetime(2026, 10, 28, 10, 0), duration=3720, **kw)
 
 
-# Real backend shape: `channels` objects, no `channel_ids`
-RULE = {
+RULE_DATA = {
     "id": "r1", "name": "API flapping", "check_id": "chk1", "check_name": "API health", "enabled": False,
     "severity": "high", "condition": "consecutive_failures", "condition_parameters": {"count": 3},
     "cooldown_period": 600, "auto_resolve": False, "multi_region_mode": "majority", "multi_region_threshold": None,
-    "created_at": "2026-10-01T10:00:00", "updated_at": "2026-10-02T10:00:00",
+    "created_at": "2026-10-01T10:00:00", "updated_at": "2026-10-02T10:00:00", "channel_ids": ["ch1", "ch2"],
     "channels": [
         {"id": "ch1", "name": "Ops mail", "type": "email", "enabled": True,
          "configuration": {"recipients": ["ops@example.com"]}},
@@ -46,6 +40,13 @@ RULE = {
                            "headers": {"Authorization": "Bearer topsecret"}}},
     ],
 }
+
+
+def rule(**overrides):
+    return AlertRule.from_dict({**RULE_DATA, **overrides})
+
+
+RULE = rule()
 
 WEBHOOK = AlertChannel(id="ch2", name="Slack", type="webhook", enabled=False,
                        configuration={"url": "https://hooks.slack.com/services/T00/B00/SECRETPATH?token=abc",
@@ -167,26 +168,29 @@ class TestAlerts:
         assert result.exit_code == 1
         assert "HTTP 400" in result.stderr and "can be acknowledged" in result.stderr
 
-    def test_notifications_tolerates_backend_values(self, cli_runner, api):
-        # Values outside the SDK enums (max, 'alert', 'cancelled') come from the real backend
-        api.v1_alerts_alert_id_notifications_get_without_preload_content.return_value = raw([
-            {"id": "n1", "channel_name": "Ops", "channel_type": "max", "notification_type": "alert",
-             "status": "cancelled", "retry_count": 0, "created_at": "2026-10-28T10:00:00", "sent_at": None},
-            {"id": "n2", "channel_name": "Ops", "channel_type": "email", "notification_type": "resolution",
-             "status": "failed", "retry_count": 2, "error_message": "SMTP timeout",
-             "created_at": "2026-10-28T11:00:00"},
-        ])
+    def test_notifications(self, cli_runner, api):
+        api.v1_alerts_alert_id_notifications_get.return_value = [
+            AlertNotification(id="n1", channel_name="Ops", channel_type="max", notification_type="alert",
+                              status="cancelled", retry_count=0, created_at=datetime(2026, 10, 28, 10)),
+            AlertNotification(id="n2", channel_name="Ops", channel_type="email", notification_type="resolution",
+                              status="failed", retry_count=2, error_message="SMTP timeout",
+                              created_at=datetime(2026, 10, 28, 11)),
+        ]
         result = cli_runner.invoke(app, ["alerts", "notifications", "al1"])
         assert result.exit_code == 0, result.output
         assert "cancelled" in result.stdout and "SMTP timeout" in result.stdout
         assert "2 notification(s), 1 failed" in result.stdout
+        api.v1_alerts_alert_id_notifications_get.assert_called_with(alert_id="al1")
 
         result = cli_runner.invoke(app, ["-o", "json", "alerts", "notifications", "al1"])
-        assert json.loads(result.stdout)[0]["channel_type"] == "max"
+        data = json.loads(result.stdout)
+        assert data[0]["id"] == "n1" and data[0]["channel_type"] == "max"
 
     def test_notifications_404(self, cli_runner, api):
-        api.v1_alerts_alert_id_notifications_get_without_preload_content.return_value = raw(
-            {"error": "Alert not found"}, status=404)
+        from pingera.exceptions import NotFoundException
+
+        api.v1_alerts_alert_id_notifications_get.side_effect = NotFoundException(
+            status=404, reason="NOT FOUND", body='{"error": "Alert not found"}')
         result = cli_runner.invoke(app, ["alerts", "notifications", "nope"])
         assert result.exit_code == 1
         assert "HTTP 404: Alert not found" in result.stderr
@@ -205,8 +209,8 @@ class TestAlerts:
 
 class TestRules:
     def test_list(self, cli_runner, api):
-        other = {**RULE, "id": "r2", "check_id": "chk2", "enabled": True, "channels": []}
-        api.v1_alerts_rules_get_without_preload_content.return_value = raw([RULE, other])
+        other = rule(id="r2", check_id="chk2", enabled=True, channels=[])
+        api.v1_alerts_rules_get.return_value = [RULE, other]
         result = cli_runner.invoke(app, ["alerts", "rules", "list", "--check", "chk1"])
         assert result.exit_code == 0, result.output
         assert "3 consecutive failures" in result.stdout
@@ -218,7 +222,7 @@ class TestRules:
         assert [r["id"] for r in json.loads(result.stdout)] == ["r2"]
 
     def test_get_renders_readably_and_masks(self, cli_runner, api):
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(RULE)
+        api.v1_alerts_rules_rule_id_get.return_value = RULE
         result = cli_runner.invoke(app, ["alerts", "rules", "get", "r1"])
         assert result.exit_code == 0, result.output
         for expected in ("API health", "3 consecutive failures", "majority of regions fail", "10m between alerts",
@@ -227,14 +231,14 @@ class TestRules:
         assert "SECRETPATH" not in result.stdout and "topsecret" not in result.stdout
 
     def test_create_with_flags(self, cli_runner, api):
-        api.v1_alerts_rules_post_without_preload_content.return_value = raw({**RULE, "id": "rnew"}, status=201)
+        api.v1_alerts_rules_post.return_value = rule(id="rnew")
         result = cli_runner.invoke(app, [
             "alerts", "rules", "create", "-n", "API flapping", "-c", "chk1", "--count", "3",
             "--channel", "ch1", "--channel", "ch2", "--channel", "ch1", "--severity", "high", "--cooldown", "10m",
             "--no-auto-resolve", "--regions-count", "2"])
         assert result.exit_code == 0, result.output
         assert "rnew" in result.stdout
-        body = api.v1_alerts_rules_post_without_preload_content.call_args.kwargs["alert_rule"]
+        body = api.v1_alerts_rules_post.call_args.kwargs["alert_rule"]
         assert body == {
             "name": "API flapping", "check_id": "chk1", "condition": "consecutive_failures",
             "condition_parameters": {"count": 3}, "channel_ids": ["ch1", "ch2"], "severity": "high",
@@ -243,27 +247,27 @@ class TestRules:
         }
 
     def test_create_uptime_defaults_condition(self, cli_runner, api):
-        api.v1_alerts_rules_post_without_preload_content.return_value = raw(RULE, status=201)
+        api.v1_alerts_rules_post.return_value = RULE
         result = cli_runner.invoke(app, ["alerts", "rules", "create", "-n", "Up", "-c", "chk1", "--threshold", "99.5",
                                          "--window", "1d", "--channel", "ch1"])
         assert result.exit_code == 0, result.output
-        body = api.v1_alerts_rules_post_without_preload_content.call_args.kwargs["alert_rule"]
+        body = api.v1_alerts_rules_post.call_args.kwargs["alert_rule"]
         assert body["condition"] == "uptime_below_threshold"
         assert body["condition_parameters"] == {"threshold": 99.5, "time_window": 86400}
 
         cli_runner.invoke(app, ["alerts", "rules", "create", "-n", "Down", "-c", "chk1", "--channel", "ch1"])
-        body = api.v1_alerts_rules_post_without_preload_content.call_args.kwargs["alert_rule"]
+        body = api.v1_alerts_rules_post.call_args.kwargs["alert_rule"]
         assert body["condition"] == "check_failed"
 
     def test_create_from_file_with_overrides(self, cli_runner, api, tmp_path):
         path = tmp_path / "rule.yaml"
         path.write_text("name: From file\ncheck_id: chk9\ncondition: consecutive_failures\n"
-                        "condition_parameters: {count: 2}\nchannels: [{id: chA}, {id: chB}]\nid: ignored\n")
-        api.v1_alerts_rules_post_without_preload_content.return_value = raw(RULE, status=201)
+                        "condition_parameters: {count: 2}\nchannel_ids: [chA, chB]\nid: ignored\ncheck_name: API\n")
+        api.v1_alerts_rules_post.return_value = RULE
         result = cli_runner.invoke(app, ["alerts", "rules", "create", "-f", str(path), "--count", "4",
                                          "--name", "Override"])
         assert result.exit_code == 0, result.output
-        body = api.v1_alerts_rules_post_without_preload_content.call_args.kwargs["alert_rule"]
+        body = api.v1_alerts_rules_post.call_args.kwargs["alert_rule"]
         assert body["name"] == "Override"
         assert body["check_id"] == "chk9"
         assert body["channel_ids"] == ["chA", "chB"]
@@ -284,7 +288,7 @@ class TestRules:
         result = cli_runner.invoke(app, ["alerts", "rules", "create", *args])
         assert result.exit_code == 2
         assert message in result.output
-        api.v1_alerts_rules_post_without_preload_content.assert_not_called()
+        api.v1_alerts_rules_post.assert_not_called()
 
     def test_create_file_unknown_field(self, cli_runner, api, tmp_path):
         path = tmp_path / "rule.json"
@@ -293,67 +297,87 @@ class TestRules:
         assert result.exit_code == 2
         assert "check" in result.output
 
-    def test_update_sends_full_rule_with_changes(self, cli_runner, api):
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(RULE)
-        api.v1_alerts_rules_rule_id_put_without_preload_content.return_value = raw(RULE)
+    def test_update_sends_only_changed_fields(self, cli_runner, api):
+        api.v1_alerts_rules_rule_id_put.return_value = RULE
+        result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--name", "Renamed", "--cooldown", "1h",
+                                         "--channel", "ch3", "--no-auto-resolve", "--regions", "all_regions"])
+        assert result.exit_code == 0, result.output
+        api.v1_alerts_rules_rule_id_get.assert_not_called()
+        api.v1_alerts_rules_rule_id_put.assert_called_once_with(rule_id="r1", alert_rule1={
+            "name": "Renamed", "cooldown_period": 3600, "channel_ids": ["ch3"], "auto_resolve": False,
+            "multi_region_mode": "all_regions"})
+
+    def test_update_condition_params_merged_into_current(self, cli_runner, api):
+        # condition_parameters is replaced as a whole by the API, so the current ones are merged in
+        api.v1_alerts_rules_rule_id_get.return_value = rule(
+            condition="uptime_below_threshold", condition_parameters={"threshold": 95, "time_window": 3600})
+        api.v1_alerts_rules_rule_id_put.return_value = RULE
+        result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--window", "30m"])
+        assert result.exit_code == 0, result.output
+        api.v1_alerts_rules_rule_id_put.assert_called_once_with(rule_id="r1", alert_rule1={
+            "condition": "uptime_below_threshold", "condition_parameters": {"threshold": 95, "time_window": 1800}})
+
+    def test_update_count_on_same_condition(self, cli_runner, api):
+        api.v1_alerts_rules_rule_id_get.return_value = RULE
+        api.v1_alerts_rules_rule_id_put.return_value = RULE
         result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--name", "Renamed", "--count", "5"])
         assert result.exit_code == 0, result.output
-        kwargs = api.v1_alerts_rules_rule_id_put_without_preload_content.call_args.kwargs
-        assert kwargs["rule_id"] == "r1"
-        # unchanged fields are preserved (the SDK model would otherwise reset enabled/cooldown/auto_resolve)
-        assert kwargs["alert_rule1"] == {
-            "name": "Renamed", "enabled": False, "severity": "high", "condition": "consecutive_failures",
-            "condition_parameters": {"count": 5}, "cooldown_period": 600, "auto_resolve": False,
-            "multi_region_mode": "majority", "channel_ids": ["ch1", "ch2"],
-        }
+        assert api.v1_alerts_rules_rule_id_put.call_args.kwargs["alert_rule1"] == {
+            "name": "Renamed", "condition": "consecutive_failures", "condition_parameters": {"count": 5}}
 
     def test_update_condition_change_resets_params(self, cli_runner, api):
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(RULE)
-        api.v1_alerts_rules_rule_id_put_without_preload_content.return_value = raw(RULE)
-        result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--threshold", "99", "--channel", "ch3"])
+        api.v1_alerts_rules_rule_id_get.return_value = RULE
+        api.v1_alerts_rules_rule_id_put.return_value = RULE
+        result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--threshold", "99"])
         assert result.exit_code == 0, result.output
-        body = api.v1_alerts_rules_rule_id_put_without_preload_content.call_args.kwargs["alert_rule1"]
-        assert body["condition"] == "uptime_below_threshold"
-        assert body["condition_parameters"] == {"threshold": 99}
-        assert body["channel_ids"] == ["ch3"]
+        assert api.v1_alerts_rules_rule_id_put.call_args.kwargs["alert_rule1"] == {
+            "condition": "uptime_below_threshold", "condition_parameters": {"threshold": 99}}
+
+    def test_update_condition_needs_params(self, cli_runner, api):
+        api.v1_alerts_rules_rule_id_get.return_value = rule(condition="check_failed", condition_parameters={})
+        result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "--condition", "consecutive_failures"])
+        assert result.exit_code == 2
+        assert "--count" in result.output
+        api.v1_alerts_rules_rule_id_put.assert_not_called()
 
     def test_update_ignores_check_change(self, cli_runner, api, tmp_path):
         path = tmp_path / "rule.json"
         path.write_text(json.dumps({"check_id": "other", "severity": "low"}))
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(RULE)
-        api.v1_alerts_rules_rule_id_put_without_preload_content.return_value = raw(RULE)
+        api.v1_alerts_rules_rule_id_get.return_value = RULE
+        api.v1_alerts_rules_rule_id_put.return_value = RULE
         result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1", "-f", str(path)])
         assert result.exit_code == 0, result.output
         assert "can't be changed" in result.stdout
-        body = api.v1_alerts_rules_rule_id_put_without_preload_content.call_args.kwargs["alert_rule1"]
-        assert "check_id" not in body and body["severity"] == "low"
+        assert api.v1_alerts_rules_rule_id_put.call_args.kwargs["alert_rule1"] == {"severity": "low"}
 
     def test_update_nothing(self, cli_runner, api):
         result = cli_runner.invoke(app, ["alerts", "rules", "update", "r1"])
         assert result.exit_code == 2
-        api.v1_alerts_rules_rule_id_get_without_preload_content.assert_not_called()
+        api.v1_alerts_rules_rule_id_put.assert_not_called()
 
     def test_enable_disable(self, cli_runner, api):
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(RULE)
-        api.v1_alerts_rules_rule_id_put_without_preload_content.return_value = raw({**RULE, "enabled": True})
+        api.v1_alerts_rules_rule_id_put.return_value = rule(enabled=True)
         result = cli_runner.invoke(app, ["-o", "json", "alerts", "rules", "enable", "r1"])
         assert result.exit_code == 0, result.output
-        assert json.loads(result.stdout)["enabled"] is True
-        body = api.v1_alerts_rules_rule_id_put_without_preload_content.call_args.kwargs["alert_rule1"]
-        assert body["enabled"] is True and body["cooldown_period"] == 600
+        data = json.loads(result.stdout)
+        assert data["enabled"] is True and data["id"] == "r1"
+        api.v1_alerts_rules_rule_id_put.assert_called_with(rule_id="r1", alert_rule1={"enabled": True})
 
         result = cli_runner.invoke(app, ["alerts", "rules", "disable", "r1"])
         assert result.exit_code == 0
-        body = api.v1_alerts_rules_rule_id_put_without_preload_content.call_args.kwargs["alert_rule1"]
-        assert body["enabled"] is False
+        api.v1_alerts_rules_rule_id_put.assert_called_with(rule_id="r1", alert_rule1={"enabled": False})
+        api.v1_alerts_rules_rule_id_get.assert_not_called()
 
-    def test_get_404(self, cli_runner, api):
-        api.v1_alerts_rules_rule_id_get_without_preload_content.return_value = raw(
-            {"message": "Alert rule not found"}, status=404)
-        result = cli_runner.invoke(app, ["alerts", "rules", "disable", "nope"])
-        assert result.exit_code == 1
-        assert "HTTP 404: Alert rule not found" in result.stderr
-        api.v1_alerts_rules_rule_id_put_without_preload_content.assert_not_called()
+    def test_not_found(self, cli_runner, api):
+        from pingera.exceptions import NotFoundException
+
+        error = NotFoundException(status=404, reason="NOT FOUND", body='{"message": "Alert rule not found"}')
+        api.v1_alerts_rules_rule_id_get.side_effect = error
+        api.v1_alerts_rules_rule_id_put.side_effect = error
+        for args in (["get", "nope"], ["disable", "nope"]):
+            result = cli_runner.invoke(app, ["alerts", "rules", *args])
+            assert result.exit_code == 1
+            assert "HTTP 404: Alert rule not found" in result.stderr
 
     def test_delete(self, cli_runner, api):
         result = cli_runner.invoke(app, ["alerts", "rules", "delete", "r1"], input="n\n")
@@ -461,20 +485,31 @@ class TestChannels:
         assert "not created" in result.stderr
         api.v1_alerts_channels_post.assert_not_called()
 
-    def test_update_merges_into_current(self, cli_runner, api):
+    def test_update_merges_into_current_config(self, cli_runner, api):
+        # The API replaces `configuration` as a whole, so the CLI merges into the current one
         api.v1_alerts_channels_channel_id_get.return_value = WEBHOOK
         api.v1_alerts_channels_channel_id_put.return_value = WEBHOOK
         result = cli_runner.invoke(app, ["alerts", "channels", "update", "ch2", "--name", "Renamed",
                                          "-H", "Authorization:", "-H", "X-New: 1", "--config", '{"bot_token": null}'])
         assert result.exit_code == 0, result.output
-        kwargs = api.v1_alerts_channels_channel_id_put.call_args.kwargs
-        assert kwargs["channel_id"] == "ch2"
-        assert kwargs["alert_channel1"] == {
-            "name": "Renamed", "type": "webhook", "enabled": False,  # disabled state preserved
+        api.v1_alerts_channels_channel_id_put.assert_called_once_with(channel_id="ch2", alert_channel1={
+            "name": "Renamed", "type": "webhook",
             "configuration": {"url": WEBHOOK.configuration["url"], "method": "POST",
                               "headers": {"Content-Type": "application/json", "X-New": "1"}},
-        }
+        })
         assert "topsecret" not in result.stdout
+
+    def test_update_without_config_sends_only_changes(self, cli_runner, api, tmp_path):
+        path = tmp_path / "ch.yaml"
+        path.write_text("name: From file\nid: ignored\n")
+        api.v1_alerts_channels_channel_id_put.return_value = WEBHOOK
+        result = cli_runner.invoke(app, ["-o", "json", "alerts", "channels", "update", "ch2", "-f", str(path),
+                                         "--disabled"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["id"] == "ch2"
+        api.v1_alerts_channels_channel_id_get.assert_not_called()
+        api.v1_alerts_channels_channel_id_put.assert_called_once_with(
+            channel_id="ch2", alert_channel1={"name": "From file", "enabled": False})
 
     def test_update_rejects_other_type_flags(self, cli_runner, api):
         api.v1_alerts_channels_channel_id_get.return_value = WEBHOOK

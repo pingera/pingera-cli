@@ -17,7 +17,6 @@ from .alert_common import (
     as_dict,
     channel_target,
     check_choice,
-    dump,
     load_file,
     mask_config,
     mask_url,
@@ -191,7 +190,7 @@ class AlertChannelsCommand(BaseCommand):
         if channel_type:
             channels = [c for c in channels if c.type == channel_type]
         if self.machine_output:
-            self.output_data(dump(channels))
+            self.output_model(channels)
             return
         if not channels:
             self.display_info("No alert channels found. Create one with 'pngr alerts channels create'.")
@@ -225,7 +224,7 @@ class AlertChannelsCommand(BaseCommand):
         except Exception as e:
             self.fail("get alert channel", e)
         if self.machine_output:
-            self.output_data(dump(channel))
+            self.output_model(channel)
             return
         enabled = channel.enabled is not False
         lines = [
@@ -244,7 +243,7 @@ class AlertChannelsCommand(BaseCommand):
 
     def _done(self, channel, title: str):
         if self.machine_output:
-            self.output_data(dump(channel))
+            self.output_model(channel)
             return
         self.display_success(
             f"[bold cyan]ID:[/bold cyan] {text(channel.id)}\n"
@@ -298,30 +297,29 @@ class AlertChannelsCommand(BaseCommand):
         config_json = parse_json_option(config_json, "--config")
         if not file_data and name is None and enabled is None and config_json is None and not _given(flags):
             raise typer.BadParameter("nothing to update; pass at least one option or --from-file")
-        try:
-            current = self._get(channel_id)
-        except typer.Exit:
-            raise
-        except Exception as e:
-            self.fail("get alert channel", e)
-
-        channel_type = current.type
-        if file_data.get("type") not in (None, channel_type):
-            raise typer.BadParameter(f"the type of a channel can't be changed ({channel_type}); create a new channel",
-                                     param_hint="--from-file")
-        payload = {"name": current.name, "type": channel_type,
-                   "enabled": current.enabled if isinstance(current.enabled, bool) else True}
-        payload.update({k: v for k, v in file_data.items() if k in ("name", "enabled")})
+        payload: Dict[str, Any] = {k: v for k, v in file_data.items() if k in ("name", "enabled")}
         if name is not None:
             payload["name"] = name
         if enabled is not None:
             payload["enabled"] = enabled
-        base_config = {**as_dict(current.configuration), **as_dict(file_data.get("configuration"))}
-        payload["configuration"] = build_config(base_config, config_json, flags, channel_type)
-        if config_json is not None or _given(flags) or "configuration" in file_data:
-            validate_config(channel_type, payload["configuration"])
 
-        # The whole channel is sent: the SDK update model would otherwise reset `enabled` to true
+        # The API replaces `configuration` as a whole, so config changes are merged into the current one
+        if config_json is not None or _given(flags) or "configuration" in file_data or "type" in file_data:
+            try:
+                current = self._get(channel_id)
+            except typer.Exit:
+                raise
+            except Exception as e:
+                self.fail("get alert channel", e)
+            channel_type = current.type
+            if file_data.get("type") not in (None, channel_type):
+                raise typer.BadParameter(f"the type of a channel can't be changed ({channel_type}); "
+                                         "create a new channel", param_hint="--from-file")
+            base_config = {**as_dict(current.configuration), **as_dict(file_data.get("configuration"))}
+            payload["configuration"] = build_config(base_config, config_json, flags, channel_type)
+            validate_config(channel_type, payload["configuration"])
+            payload["type"] = channel_type  # makes the API validate the new configuration
+
         try:
             channel = self._api().v1_alerts_channels_channel_id_put(channel_id=channel_id, alert_channel1=payload)
         except typer.Exit:
@@ -386,7 +384,7 @@ class AlertChannelsCommand(BaseCommand):
             self.fail("send test notification", e)
 
         if self.machine_output:
-            self.output_data(dump(result))
+            self.output_model(result)
         else:
             self._render_test(result, channel_id or name or f"unsaved {channel_type} channel")
         if result.success is not True:

@@ -18,15 +18,13 @@ from .alert_common import (
     as_dict,
     as_list,
     check_choice,
-    dump,
     pagination_line,
     parse_dt,
-    raw_call,
     styled,
     text,
 )
 from .alert_rules import app as rules_app
-from .base import BaseCommand
+from .base import BaseCommand, to_plain
 from ..utils.time_utils import format_dt, format_duration, parse_time_arg
 
 SCAN_PAGE_SIZE = 100
@@ -68,7 +66,7 @@ class AlertsCommand(BaseCommand):
             self.fail("list alerts", e)
 
         if self.machine_output:
-            result = {"alerts": dump(alerts), "pagination": pagination}
+            result = {"alerts": to_plain(alerts), "pagination": pagination}
             if start_dt or end_dt:
                 result["date_filter"] = {"from": start_dt, "to": end_dt, "scanned": scanned, "truncated": truncated}
             self.output_data(result)
@@ -139,7 +137,7 @@ class AlertsCommand(BaseCommand):
             self.fail("get alert", e)
 
         if self.machine_output:
-            self.output_data(dump(alert))
+            self.output_model(alert)
             return
         self._render_alert(alert)
 
@@ -210,7 +208,7 @@ class AlertsCommand(BaseCommand):
             self.fail(f"{action} alert", e)
 
         if self.machine_output:
-            self.output_data(dump(alert))
+            self.output_model(alert)
             return
         verb = "acknowledged" if action == "acknowledge" else "resolved"
         self.display_success(
@@ -222,16 +220,16 @@ class AlertsCommand(BaseCommand):
 
     def notifications(self, alert_id: str):
         try:
-            data = raw_call(self._api(), "v1_alerts_alert_id_notifications_get", alert_id=alert_id)
+            notifications = self._api().v1_alerts_alert_id_notifications_get(alert_id=alert_id) or []
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("get alert notifications", e)
 
-        items = [n for n in as_list(data) if isinstance(n, dict)]
         if self.machine_output:
-            self.output_data(items)
+            self.output_model(notifications)
             return
+        items = to_plain(notifications)
         if not items:
             self.display_info(f"No notifications were sent for alert {alert_id}.")
             return
@@ -273,7 +271,7 @@ class AlertsCommand(BaseCommand):
             self.fail("get alert stats", e)
 
         if self.machine_output:
-            self.output_data(dump(stats))
+            self.output_model(stats)
             return
 
         active = stats.active_alerts or 0

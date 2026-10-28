@@ -10,7 +10,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from .base import BaseCommand, to_plain
-from .status_page_common import as_dict, styled, text, truncate
+from .status_page_common import styled, text, truncate
 from ..utils.time_utils import format_dt
 
 
@@ -22,17 +22,16 @@ class ComponentGroupsCommand(BaseCommand):
         return self.api(StatusPagesComponentsApi)
 
     def _children(self, api, page_id: str) -> Optional[Dict[str, List[Dict[str, Any]]]]:
-        """Map group_id -> member components; None if the component list can't be fetched."""
+        """Map group_id -> member components (the API doesn't return members); None if unavailable."""
         try:
-            components = api.v1_pages_page_id_components_get(page_id=page_id) or []
+            components = api.v1_pages_page_id_components_get(page_id=page_id, show_groups=False) or []
         except Exception:
             return None
         children: Dict[str, List[Dict[str, Any]]] = {}
         for comp in components:
-            comp = as_dict(comp)
-            if comp.get("group_id") and not comp.get("group"):
-                children.setdefault(str(comp["group_id"]), []).append(
-                    {"id": comp.get("id"), "name": comp.get("name"), "status": comp.get("status")}
+            if comp.group_id and not comp.group:
+                children.setdefault(str(comp.group_id), []).append(
+                    {"id": comp.id, "name": comp.name, "status": comp.status}
                 )
         return children
 
@@ -174,8 +173,6 @@ class ComponentGroupsCommand(BaseCommand):
             api = self._api()
             group = None
             if payload:
-                # The SDK model defaults `group` to false and always sends it; keep the group a group.
-                payload["group"] = True
                 group = api.v1_pages_page_id_component_groups_component_id_patch(
                     page_id=page_id, component_id=group_id, component1=payload
                 )
@@ -194,7 +191,7 @@ class ComponentGroupsCommand(BaseCommand):
         else:
             lines = [f"ID: {group_id}"]
             if payload:
-                lines.append("Updated: " + ", ".join(k for k in payload if k != "group"))
+                lines.append("Updated: " + ", ".join(payload))
             if add:
                 lines.append(f"Components added: {len(add) - len(add_errors)} of {len(add)}")
             if remove:

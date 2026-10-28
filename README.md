@@ -24,7 +24,7 @@ Install Pingera Platform CLI using pip (requires Python 3.10+):
 pip install pingera-cli
 ```
 
-The CLI is built on [pingera-sdk](https://pypi.org/project/pingera-sdk/) 1.1+, which is installed automatically.
+The CLI is built on [pingera-sdk](https://pypi.org/project/pingera-sdk/) 1.2+, which is installed automatically.
 
 ## 🔐 Authentication
 

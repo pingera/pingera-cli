@@ -1,12 +1,10 @@
 """
-Shared helpers for status page commands (enums, parsing, raw API calls)
+Shared helpers for status page commands (enums, parsing, display)
 """
 
-import json
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
-from urllib.parse import urlencode
 
 import typer
 
@@ -132,41 +130,8 @@ def iso(value: Optional[datetime]) -> Optional[str]:
     return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if value else None
 
 
-def raw_json(api, method_name: str, query: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
-    """
-    Call an SDK endpoint and return the decoded JSON body without SDK model deserialization.
-
-    Used where the SDK response models reject valid API data (e.g. PagePassword requires a
-    write-only `password`, IncidentUpdate rejects maintenance statuses, EmailDomain recurses)
-    or where the SDK lacks query params the API supports (`query`).
-    """
-    from pingera.exceptions import ApiException
-
-    query = {k: v for k, v in (query or {}).items() if v is not None}
-    if query:
-        serialize = getattr(api, f"_{method_name}_serialize")
-        method, url, headers, body, post_params = serialize(
-            **kwargs, _request_auth=None, _content_type=None, _headers=None, _host_index=0
-        )
-        url += ("&" if "?" in url else "?") + urlencode(query)
-        response = api.api_client.call_api(method, url, header_params=headers, body=body, post_params=post_params)
-        response.read()
-    else:
-        response = getattr(api, f"{method_name}_without_preload_content")(**kwargs)
-
-    data = response.data
-    body_text = data.decode("utf-8", errors="replace") if isinstance(data, (bytes, bytearray)) else (data or "")
-    if not 200 <= int(response.status) <= 299:
-        raise ApiException.from_response(http_resp=response, body=body_text, data=None)
-    if not body_text.strip():
-        return None
-    try:
-        return json.loads(body_text)
-    except ValueError:
-        raise ValueError(f"unexpected non-JSON response: {body_text[:200]}")
-
-
 def as_dict(value: Any) -> Dict[str, Any]:
+    """Dict view of an untyped (Any) API field or an SDK model."""
     if hasattr(value, "model_dump"):
         value = to_plain(value)
     return value if isinstance(value, dict) else {}
@@ -177,7 +142,7 @@ def as_list(value: Any) -> List[Any]:
 
 
 def component_status_map(value: Any) -> Dict[str, str]:
-    """Normalize incident-update `components` (dict id->status, or list of component dicts)."""
+    """Normalize the untyped incident-update `components` (dict id->status, or list of component dicts)."""
     if isinstance(value, dict):
         return {str(k): str(v) for k, v in value.items() if isinstance(v, (str, int, float))}
     result = {}

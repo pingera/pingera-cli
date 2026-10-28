@@ -54,32 +54,6 @@ def styled(value: Any, styles: Dict[str, str]) -> str:
     return f"[{style}]{raw}[/{style}]" if style else raw
 
 
-def raw_call(api: Any, method: str, **kwargs) -> Any:
-    """
-    Call an SDK operation and return the decoded JSON body without SDK model validation.
-
-    Used where SDK 1.1.0 models reject real backend responses (rules lack `channel_ids`,
-    notifications use statuses/types outside the generated enums).
-    """
-    from pingera.exceptions import ApiException
-
-    response = getattr(api, f"{method}_without_preload_content")(**kwargs)
-    body = response.data or b""
-    body_text = body.decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)
-    if not 200 <= int(response.status) <= 299:
-        raise ApiException(status=response.status, reason=response.reason, body=body_text)
-    return json.loads(body_text) if body_text.strip() else None
-
-
-def dump(obj: Any) -> Any:
-    """Plain data for -o json/yaml. SDK to_dict() drops readOnly fields (ids, timestamps, all Alert fields)."""
-    if isinstance(obj, list):
-        return [dump(o) for o in obj]
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json", by_alias=True)
-    return obj
-
-
 def as_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 

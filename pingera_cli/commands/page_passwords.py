@@ -10,7 +10,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from .base import BaseCommand
-from .status_page_common import as_dict, as_list, iso, parse_future_time, raw_json, text
+from .status_page_common import iso, parse_future_time, text
 from ..utils.time_utils import format_dt
 
 
@@ -23,15 +23,14 @@ class PagePasswordsCommand(BaseCommand):
 
     def list_passwords(self, page_id: str):
         try:
-            data = raw_json(self._api(), "v1_pages_page_id_passwords_get", page_id=page_id)
+            passwords = self._api().v1_pages_page_id_passwords_get(page_id=page_id) or []
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("list page passwords", e)
 
-        passwords = [as_dict(p) for p in as_list(data)]
         if self.machine_output:
-            self.output_data(passwords)
+            self.output_model(passwords)
             return
         if not passwords:
             self.display_info(f"Page {page_id} has no passwords (it is not password protected).\n"
@@ -46,33 +45,32 @@ class PagePasswordsCommand(BaseCommand):
         table.add_column("Expires (UTC)")
         table.add_column("Created (UTC)")
         for pw in passwords:
-            if pw.get("is_expired") is True:
+            if pw.is_expired is True:
                 state = "[red]expired[/red]"
-            elif pw.get("active") is False:
+            elif pw.active is False:
                 state = "[yellow]inactive[/yellow]"
             else:
                 state = "[green]active[/green]"
             table.add_row(
-                text(pw.get("id")), text(pw.get("name")), text(pw.get("password_hint")), state,
-                format_dt(pw.get("expires_at")) if pw.get("expires_at") else "[dim]never[/dim]",
-                format_dt(pw.get("created_at")),
+                text(pw.id), text(pw.name), text(pw.password_hint), state,
+                format_dt(pw.expires_at) if pw.expires_at else "[dim]never[/dim]",
+                format_dt(pw.created_at),
             )
         self.console.print(table)
         self.console.print(f"[dim]{len(passwords)} password(s) • max 10 per page[/dim]")
 
     def add_password(self, page_id: str, payload: Dict[str, Any]):
         try:
-            data = raw_json(self._api(), "v1_pages_page_id_passwords_post", page_id=page_id, page_password_create=payload)
+            pw = self._api().v1_pages_page_id_passwords_post(page_id=page_id, page_password_create=payload)
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("add page password", e)
 
-        pw = as_dict(data)
         if self.machine_output:
-            self.output_data(pw)
+            self.output_model(pw)
             return
-        lines = [f"ID: {text(pw.get('id'))}", f"Name: {text(pw.get('name') or payload.get('name'), '(unnamed)')}"]
+        lines = [f"ID: {text(pw.id)}", f"Name: {text(pw.name or payload.get('name'), '(unnamed)')}"]
         if payload.get("expires_at"):
             lines.append(f"Expires: {format_dt(payload['expires_at'])} UTC")
         lines.append("Password protection is now enabled for the page.")
@@ -80,19 +78,19 @@ class PagePasswordsCommand(BaseCommand):
 
     def update_password(self, page_id: str, password_id: str, payload: Dict[str, Any]):
         try:
-            data = raw_json(self._api(), "v1_pages_page_id_passwords_password_id_put",
-                            page_id=page_id, password_id=password_id, page_password_update=payload)
+            pw = self._api().v1_pages_page_id_passwords_password_id_put(
+                page_id=page_id, password_id=password_id, page_password_update=payload
+            )
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("update page password", e)
 
-        pw = as_dict(data)
         if self.machine_output:
-            self.output_data(pw)
+            self.output_model(pw)
             return
         changed = ", ".join("password" if k == "password" else k.replace("_", " ") for k in payload)
-        self.display_success(f"ID: {text(pw.get('id'), password_id)}\nChanged: {changed}", "✅ Password Updated")
+        self.display_success(f"ID: {text(pw.id, password_id)}\nChanged: {changed}", "✅ Password Updated")
 
     def delete_password(self, page_id: str, password_id: str, confirm: bool):
         if not confirm and not Confirm.ask(

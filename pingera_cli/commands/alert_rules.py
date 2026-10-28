@@ -22,11 +22,10 @@ from .alert_common import (
     load_file,
     parse_json_option,
     parse_seconds,
-    raw_call,
     styled,
     text,
 )
-from .base import BaseCommand
+from .base import BaseCommand, to_plain
 from ..utils.time_utils import format_dt
 
 RULE_FIELDS = ("name", "check_id", "enabled", "severity", "condition", "condition_parameters", "cooldown_period",
@@ -66,30 +65,7 @@ def _is_int(value: Any) -> bool:
 
 
 def _channel_ids(rule: Dict[str, Any]) -> List[str]:
-    ids = rule.get("channel_ids")
-    if isinstance(ids, list) and ids and all(isinstance(i, str) for i in ids):
-        return ids
-    return [c["id"] for c in as_list(rule.get("channels")) if isinstance(c, dict) and isinstance(c.get("id"), str)]
-
-
-def _current_payload(rule: Dict[str, Any]) -> Dict[str, Any]:
-    """Writable fields of an existing rule (the API returns `channels` objects instead of `channel_ids`)."""
-    checks = {
-        "name": lambda v: isinstance(v, str) and v,
-        "enabled": lambda v: isinstance(v, bool),
-        "severity": lambda v: v in SEVERITIES,
-        "condition": lambda v: v in CONDITIONS,
-        "condition_parameters": lambda v: isinstance(v, dict),
-        "cooldown_period": lambda v: _is_int(v) and v >= 0,
-        "auto_resolve": lambda v: isinstance(v, bool),
-        "multi_region_mode": lambda v: v in REGION_MODES,
-        "multi_region_threshold": lambda v: isinstance(v, dict),
-    }
-    payload = {k: rule[k] for k, ok in checks.items() if k in rule and ok(rule[k])}
-    ids = _channel_ids(rule)
-    if ids:
-        payload["channel_ids"] = ids
-    return payload
+    return [i for i in as_list(rule.get("channel_ids")) if isinstance(i, str)]
 
 
 def _file_payload(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -98,16 +74,16 @@ def _file_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         raise typer.BadParameter(
             f"unknown field(s) {', '.join(unknown)}; allowed: {', '.join(RULE_FIELDS)}", param_hint="--from-file"
         )
-    payload = {k: data[k] for k in RULE_FIELDS if data.get(k) is not None}
-    if "channel_ids" not in payload:
-        ids = _channel_ids(data)
-        if ids:
-            payload["channel_ids"] = ids
-    return payload
+    return {k: data[k] for k in RULE_FIELDS if data.get(k) is not None}
 
 
 def build_rule(base: Dict[str, Any], file_data: Dict[str, Any], flags: Dict[str, Any], create: bool) -> Dict[str, Any]:
-    """Merge existing rule (update), file values and command-line flags (flags win)."""
+    """
+    Merge file values and command-line flags (flags win).
+
+    `base` holds the current condition/condition_parameters on update: the API replaces
+    condition_parameters as a whole, so changed parameters are merged into the current ones.
+    """
     payload = {**base, **file_data}
 
     for flag, field in (("name", "name"), ("check_id", "check_id"), ("severity", "severity"),
@@ -199,13 +175,12 @@ class AlertRulesCommand(BaseCommand):
 
     def list_rules(self, check_id: Optional[str], enabled: Optional[bool]):
         try:
-            data = raw_call(self._api(), "v1_alerts_rules_get")
+            rules = to_plain(self._api().v1_alerts_rules_get() or [])
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("list alert rules", e)
 
-        rules = [r for r in as_list(data) if isinstance(r, dict)]
         if check_id:
             rules = [r for r in rules if r.get("check_id") == check_id]
         if enabled is not None:
@@ -243,8 +218,7 @@ class AlertRulesCommand(BaseCommand):
         self.console.print(f"[dim]{len(rules)} rule(s)[/dim]")
 
     def _get(self, rule_id: str) -> Dict[str, Any]:
-        data = raw_call(self._api(), "v1_alerts_rules_rule_id_get", rule_id=rule_id)
-        return as_dict(data)
+        return to_plain(self._api().v1_alerts_rules_rule_id_get(rule_id=rule_id))
 
     def get_rule(self, rule_id: str):
         try:
@@ -295,10 +269,11 @@ class AlertRulesCommand(BaseCommand):
         elif _channel_ids(rule):
             self.console.print(f"[bold cyan]Notifies channels:[/bold cyan] {', '.join(_channel_ids(rule))}")
 
-    def _done(self, rule: Dict[str, Any], title: str):
+    def _done(self, model: Any, title: str):
         if self.machine_output:
-            self.output_data(rule)
+            self.output_model(model)
             return
+        rule = to_plain(model)
         channels = len(_channel_ids(rule))
         self.display_success(
             f"[bold cyan]ID:[/bold cyan] {text(rule.get('id'))}\n"
@@ -315,27 +290,18 @@ class AlertRulesCommand(BaseCommand):
         payload = build_rule({}, file_data, flags, create=True)
         validate_rule(payload, flags, create=True, condition_touched=True, regions_touched=True)
         try:
-            rule = raw_call(self._api(), "v1_alerts_rules_post", alert_rule=payload)
+            rule = self._api().v1_alerts_rules_post(alert_rule=payload)
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("create alert rule", e)
-        self._done(as_dict(rule), "✅ Alert rule created")
+        self._done(rule, "✅ Alert rule created")
 
     def update_rule(self, rule_id: str, file_path: Optional[str], flags: Dict[str, Any]):
         file_data = _file_payload(load_file(file_path))
         if not file_data and not any(v not in (None, [], {}) for v in flags.values()):
             raise typer.BadParameter("nothing to update; pass at least one option or --from-file")
         new_check = file_data.pop("check_id", None)
-        try:
-            current = self._get(rule_id)
-        except typer.Exit:
-            raise
-        except Exception as e:
-            self.fail("get alert rule", e)
-        if new_check and new_check != current.get("check_id"):
-            self.display_warning("The check of an existing rule can't be changed; 'check_id' was ignored. "
-                                 "Create a new rule for the other check instead.")
 
         condition_keys = ("condition", "count", "threshold", "window", "params")
         condition_touched = any(flags.get(k) is not None for k in condition_keys) or \
@@ -343,31 +309,36 @@ class AlertRulesCommand(BaseCommand):
         regions_touched = flags.get("regions") is not None or flags.get("regions_count") is not None or \
             any(k in file_data for k in ("multi_region_mode", "multi_region_threshold"))
 
-        base = _current_payload(current)
+        base: Dict[str, Any] = {}
+        if condition_touched or new_check:
+            try:
+                current = self._get(rule_id)
+            except typer.Exit:
+                raise
+            except Exception as e:
+                self.fail("get alert rule", e)
+            if new_check and new_check != current.get("check_id"):
+                self.display_warning("The check of an existing rule can't be changed; 'check_id' was ignored. "
+                                     "Create a new rule for the other check instead.")
+            if condition_touched:
+                base = {k: current[k] for k in ("condition", "condition_parameters") if k in current}
+
         payload = build_rule(base, file_data, flags, create=False)
         validate_rule(payload, flags, create=False, condition_touched=condition_touched, regions_touched=regions_touched)
         self._put(rule_id, payload, "update alert rule", "✅ Alert rule updated")
 
     def _put(self, rule_id: str, payload: Dict[str, Any], action: str, title: str):
-        # The full rule is sent: the SDK update model fills unset fields with defaults (enabled=True, cooldown 300...)
         try:
-            rule = raw_call(self._api(), "v1_alerts_rules_rule_id_put", rule_id=rule_id, alert_rule1=payload)
+            rule = self._api().v1_alerts_rules_rule_id_put(rule_id=rule_id, alert_rule1=payload)
         except typer.Exit:
             raise
         except Exception as e:
             self.fail(action, e)
-        self._done(as_dict(rule), title)
+        self._done(rule, title)
 
     def set_enabled(self, rule_id: str, enabled: bool):
         action = "enable" if enabled else "disable"
-        try:
-            current = self._get(rule_id)
-        except typer.Exit:
-            raise
-        except Exception as e:
-            self.fail(f"{action} alert rule", e)
-        payload = {**_current_payload(current), "enabled": enabled}
-        self._put(rule_id, payload, f"{action} alert rule",
+        self._put(rule_id, {"enabled": enabled}, f"{action} alert rule",
                   "✅ Alert rule enabled" if enabled else "⏸️ Alert rule disabled")
 
     def delete_rule(self, rule_id: str, confirm: bool):

@@ -7,29 +7,20 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from pingera.exceptions import NotFoundException
+from pingera.exceptions import ApiException, NotFoundException
 from pingera.models import (
     Component,
     Component1,
+    ComponentUptime,
+    EmailDomain,
     Incident,
     IncidentPostmortem,
+    IncidentUpdate,
+    PagePassword,
     V1PagesGetTemplatesGet200ResponseValue,
 )
 
 from pingera_cli.main import app
-
-
-class FakeResponse:
-    """Stand-in for the urllib3/RESTResponse objects returned by *_without_preload_content / call_api."""
-
-    def __init__(self, data, status=200):
-        self.status = status
-        self.reason = "OK" if status < 400 else "Error"
-        self.data = json.dumps(data).encode() if not isinstance(data, bytes) else data
-        self.headers = {}
-
-    def read(self):
-        return self.data
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +65,7 @@ class TestComponentGroups:
         assert "Databases" in result.stdout
         assert "2: Postgres, Redis" in result.stdout
         comps.v1_pages_page_id_component_groups_get.assert_called_once_with(page_id="pg1")
+        comps.v1_pages_page_id_components_get.assert_called_once_with(page_id="pg1", show_groups=False)
 
     def test_get_json_includes_members(self, cli_runner, comps):
         comps.v1_pages_page_id_component_groups_component_id_get.return_value = Component(id="grp1", name="Databases", group=True)
@@ -111,9 +103,7 @@ class TestComponentGroups:
         result = cli_runner.invoke(app, ["-o", "json", "pages", "component-groups", "update", "grp1", "-p", "pg1",
                                          "--name", "Stores", "--remove-component", "c2"])
         assert result.exit_code == 0, result.output
-        assert comps.v1_pages_page_id_component_groups_component_id_patch.call_args.kwargs["component1"] == {
-            "name": "Stores", "group": True
-        }
+        assert comps.v1_pages_page_id_component_groups_component_id_patch.call_args.kwargs["component1"] == {"name": "Stores"}
         assert comps.v1_pages_page_id_components_component_id_patch.call_args.kwargs["component1"] == {"group_id": None}
         assert _json(result)["name"] == "Stores"
 
@@ -149,6 +139,10 @@ UPTIME = [
 ]
 
 
+def _uptime():
+    return [ComponentUptime.from_dict(row) for row in UPTIME]
+
+
 class TestComponentExtras:
     def test_statuses(self, cli_runner, comps):
         comps.v1_component_statuses_get.return_value = ["operational", "major_outage"]
@@ -160,33 +154,41 @@ class TestComponentExtras:
 
     def test_uptime_report_all_components_skips_groups(self, cli_runner, comps):
         comps.v1_pages_page_id_components_get.return_value = _components()
-        comps.v1_pages_page_id_components_uptime_post_without_preload_content.return_value = FakeResponse(UPTIME)
+        comps.v1_pages_page_id_components_uptime_post.return_value = _uptime()
         result = cli_runner.invoke(app, ["pages", "components", "uptime-report", "-p", "pg1"])
         assert result.exit_code == 0, result.output
-        kwargs = comps.v1_pages_page_id_components_uptime_post_without_preload_content.call_args.kwargs
-        assert kwargs == {"page_id": "pg1", "component_uptime_bulk_request": {"component_ids": ["c1", "c2", "c3"]}}
+        comps.v1_pages_page_id_components_get.assert_called_once_with(page_id="pg1", show_groups=False)
+        assert comps.v1_pages_page_id_components_uptime_post.call_args.kwargs == {
+            "page_id": "pg1", "component_uptime_bulk_request": {"component_ids": ["c1", "c2", "c3"]}}
         assert "99.95%" in result.stdout and "97.50%" in result.stdout
         assert "1h" in result.stdout and "2h" in result.stdout
         assert "End date was adjusted" in result.stdout
 
-    def test_uptime_report_with_dates_uses_query(self, cli_runner, comps):
-        comps._v1_pages_page_id_components_uptime_post_serialize.return_value = (
-            "POST", "http://mock/v1/pages/pg1/components/uptime", {}, {"component_ids": ["c1"]}, [])
-        comps.api_client.call_api.return_value = FakeResponse(UPTIME[:1])
+    def test_uptime_report_include_groups(self, cli_runner, comps):
+        comps.v1_pages_page_id_components_get.return_value = _components()
+        comps.v1_pages_page_id_components_uptime_post.return_value = _uptime()
+        result = cli_runner.invoke(app, ["pages", "components", "uptime-report", "-p", "pg1", "--include-groups"])
+        assert result.exit_code == 0, result.output
+        comps.v1_pages_page_id_components_get.assert_called_once_with(page_id="pg1", show_groups=True)
+        assert comps.v1_pages_page_id_components_uptime_post.call_args.kwargs[
+            "component_uptime_bulk_request"] == {"component_ids": ["grp1", "c1", "c2", "c3"]}
+
+    def test_uptime_report_with_dates(self, cli_runner, comps):
+        comps.v1_pages_page_id_components_uptime_post.return_value = _uptime()[:1]
         result = cli_runner.invoke(app, ["-o", "json", "pages", "components", "uptime-report", "-p", "pg1", "-c", "c1",
                                          "--from", "2026-09-01", "--to", "2026-10-01T15:00:00Z"])
         assert result.exit_code == 0, result.output
         comps.v1_pages_page_id_components_get.assert_not_called()
-        serialize_kwargs = comps._v1_pages_page_id_components_uptime_post_serialize.call_args.kwargs
-        assert serialize_kwargs["component_uptime_bulk_request"] == {"component_ids": ["c1"]}
-        assert comps.api_client.call_api.call_args.args[1] == \
-            "http://mock/v1/pages/pg1/components/uptime?start=2026-09-01&end=2026-10-01"
+        assert comps.v1_pages_page_id_components_uptime_post.call_args.kwargs == {
+            "page_id": "pg1", "component_uptime_bulk_request": {"component_ids": ["c1"]},
+            "start": "2026-09-01", "end": "2026-10-01"}
         data = _json(result)
         assert data["start"] == "2026-09-01" and data["components"][0]["id"] == "c1"
+        assert data["components"][0]["related_events"] == {"id": ["inc1"]}
 
     def test_uptime_report_api_error(self, cli_runner, comps):
-        comps.v1_pages_page_id_components_uptime_post_without_preload_content.return_value = FakeResponse(
-            {"message": "No components found."}, status=404)
+        comps.v1_pages_page_id_components_uptime_post.side_effect = NotFoundException(
+            status=404, reason="Not Found", body='{"message": "No components found."}')
         result = cli_runner.invoke(app, ["pages", "components", "uptime-report", "-p", "pg1", "-c", "x"])
         assert result.exit_code == 1
         assert "HTTP 404: No components found." in result.stderr
@@ -196,15 +198,14 @@ class TestComponentExtras:
         assert result.exit_code == 2
         comps.v1_pages_page_id_components_get.assert_not_called()
 
-    def test_single_uptime_passes_dates_as_query(self, cli_runner, comps, monkeypatch):
+    def test_single_uptime_passes_dates(self, cli_runner, comps, monkeypatch):
         from pingera_cli.commands.components import ComponentsCommand
         monkeypatch.setattr(ComponentsCommand, "get_client", lambda self: comps)
-        comps._v1_pages_page_id_components_component_id_uptime_get_serialize.return_value = (
-            "GET", "http://mock/v1/pages/pg1/components/c1/uptime", {}, None, [])
-        comps.api_client.call_api.return_value = FakeResponse(UPTIME[0])
+        comps.v1_pages_page_id_components_component_id_uptime_get.return_value = _uptime()[0]
         result = cli_runner.invoke(app, ["pages", "components", "uptime", "c1", "-p", "pg1", "--start", "2026-01"])
         assert result.exit_code == 0, result.output
-        assert comps.api_client.call_api.call_args.args[1].endswith("/uptime?start=2026-01")
+        assert comps.v1_pages_page_id_components_component_id_uptime_get.call_args.kwargs == {
+            "page_id": "pg1", "component_id": "c1", "start": "2026-01", "end": None}
         assert "99.950%" in result.stdout
 
 
@@ -216,14 +217,19 @@ UPDATES = [
 ]
 
 
+def _updates():
+    return [IncidentUpdate.from_dict(u) for u in UPDATES]
+
+
 class TestIncidentUpdates:
     def test_list_accepts_maintenance_statuses(self, cli_runner, incs):
-        incs.v1_pages_page_id_incidents_incident_id_incident_updates_get_without_preload_content.return_value = FakeResponse(UPDATES)
+        incs.v1_pages_page_id_incidents_incident_id_incident_updates_get.return_value = _updates()
         result = cli_runner.invoke(app, ["pages", "incidents", "updates", "list", "inc1", "-p", "pg1"])
         assert result.exit_code == 0, result.output
         assert "in_progress" in result.stdout and "under_maintenance" in result.stdout
         result = cli_runner.invoke(app, ["-o", "json", "pages", "incidents", "updates", "list", "inc1", "-p", "pg1"])
         assert [u["id"] for u in _json(result)] == ["u2", "u1"]
+        incs.v1_pages_page_id_incidents_incident_id_incident_updates_get.assert_called_with(page_id="pg1", incident_id="inc1")
 
     def test_add_posts_update_via_incident_patch(self, cli_runner, incs):
         incs.v1_pages_page_id_incidents_incident_id_patch.return_value = Incident(
@@ -254,8 +260,8 @@ class TestIncidentUpdates:
         incs.v1_pages_page_id_incidents_incident_id_patch.assert_not_called()
 
     def test_edit(self, cli_runner, incs):
-        method = incs.v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch_without_preload_content
-        method.return_value = FakeResponse(UPDATES[1])
+        method = incs.v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch
+        method.return_value = _updates()[1]
         result = cli_runner.invoke(app, ["-o", "json", "pages", "incidents", "updates", "edit", "inc1", "u1", "-p", "pg1",
                                          "-b", "Fixed", "--posted-at", "2026-10-27T09:30:00+01:00", "-c", "c1=major_outage"])
         assert result.exit_code == 0, result.output
@@ -266,8 +272,8 @@ class TestIncidentUpdates:
         assert _json(result)["id"] == "u1"
 
     def test_edit_clear_components(self, cli_runner, incs):
-        method = incs.v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch_without_preload_content
-        method.return_value = FakeResponse(UPDATES[1])
+        method = incs.v1_pages_page_id_incidents_incident_id_incident_updates_incident_update_id_patch
+        method.return_value = _updates()[1]
         result = cli_runner.invoke(app, ["pages", "incidents", "updates", "edit", "inc1", "u1", "-p", "pg1", "--clear-components"])
         assert result.exit_code == 0, result.output
         assert method.call_args.kwargs["incident_update_edit"] == {"components": {}}
@@ -460,19 +466,21 @@ class TestPagePasswords:
         return sdk_apis["PagePasswordsApi"]
 
     def test_list_without_password_field(self, cli_runner, pw_api):
-        pw_api.v1_pages_page_id_passwords_get_without_preload_content.return_value = FakeResponse(PASSWORDS)
+        pw_api.v1_pages_page_id_passwords_get.return_value = [PagePassword.from_dict(p) for p in PASSWORDS]
         result = cli_runner.invoke(app, ["pages", "passwords", "list", "-p", "pg1"])
         assert result.exit_code == 0, result.output
         assert "Acme" in result.stdout and "usual" in result.stdout and "inactive" in result.stdout
         result = cli_runner.invoke(app, ["-o", "json", "pages", "passwords", "list", "-p", "pg1"])
-        assert _json(result) == PASSWORDS
+        data = _json(result)
+        assert [p["id"] for p in data] == ["pw1", "pw2"]
+        assert data[0]["password_hint"] == "usual" and "password" not in data[0]
 
     def test_add(self, cli_runner, pw_api):
-        pw_api.v1_pages_page_id_passwords_post_without_preload_content.return_value = FakeResponse(PASSWORDS[0], status=201)
+        pw_api.v1_pages_page_id_passwords_post.return_value = PagePassword.from_dict(PASSWORDS[0])
         result = cli_runner.invoke(app, ["pages", "passwords", "add", "-p", "pg1", "--password", "secret-123",
                                          "-n", "Acme", "--hint", "usual", "--expires", "2030-01-01"])
         assert result.exit_code == 0, result.output
-        assert pw_api.v1_pages_page_id_passwords_post_without_preload_content.call_args.kwargs == {
+        assert pw_api.v1_pages_page_id_passwords_post.call_args.kwargs == {
             "page_id": "pg1",
             "page_password_create": {"password": "secret-123", "name": "Acme", "password_hint": "usual",
                                      "expires_at": "2030-01-01T00:00:00Z"},
@@ -481,10 +489,10 @@ class TestPagePasswords:
         assert "secret-123" not in result.stdout
 
     def test_add_prompts_for_password(self, cli_runner, pw_api):
-        pw_api.v1_pages_page_id_passwords_post_without_preload_content.return_value = FakeResponse(PASSWORDS[0])
+        pw_api.v1_pages_page_id_passwords_post.return_value = PagePassword.from_dict(PASSWORDS[0])
         result = cli_runner.invoke(app, ["-o", "json", "pages", "passwords", "add", "-p", "pg1"], input="hunter2-long\nhunter2-long\n")
         assert result.exit_code == 0, result.output
-        assert pw_api.v1_pages_page_id_passwords_post_without_preload_content.call_args.kwargs[
+        assert pw_api.v1_pages_page_id_passwords_post.call_args.kwargs[
             "page_password_create"] == {"password": "hunter2-long"}
         assert _json(result)["id"] == "pw1"
 
@@ -493,13 +501,13 @@ class TestPagePasswords:
     def test_add_validation(self, cli_runner, pw_api, args):
         result = cli_runner.invoke(app, ["pages", "passwords", "add", "-p", "pg1", *args])
         assert result.exit_code == 2
-        pw_api.v1_pages_page_id_passwords_post_without_preload_content.assert_not_called()
+        pw_api.v1_pages_page_id_passwords_post.assert_not_called()
 
     def test_update_no_expiry(self, cli_runner, pw_api):
-        pw_api.v1_pages_page_id_passwords_password_id_put_without_preload_content.return_value = FakeResponse(PASSWORDS[0])
+        pw_api.v1_pages_page_id_passwords_password_id_put.return_value = PagePassword.from_dict(PASSWORDS[0])
         result = cli_runner.invoke(app, ["pages", "passwords", "update", "pw1", "-p", "pg1", "--inactive", "--no-expiry"])
         assert result.exit_code == 0, result.output
-        assert pw_api.v1_pages_page_id_passwords_password_id_put_without_preload_content.call_args.kwargs == {
+        assert pw_api.v1_pages_page_id_passwords_password_id_put.call_args.kwargs == {
             "page_id": "pg1", "password_id": "pw1", "page_password_update": {"active": False, "expires_at": None},
         }
 
@@ -534,7 +542,7 @@ class TestEmailDomain:
         return sdk_apis["StatusPagesApi"]
 
     def test_show_dns_table(self, cli_runner, pages_api):
-        pages_api.v1_pages_page_id_email_domain_get_without_preload_content.return_value = FakeResponse(EMAIL_DOMAIN)
+        pages_api.v1_pages_page_id_email_domain_get.return_value = EmailDomain.from_dict(EMAIL_DOMAIN)
         result = cli_runner.invoke(app, ["pages", "email-domain", "show", "-p", "pg1"])
         assert result.exit_code == 0, result.output
         for snippet in ("DNS records to create", "Domain ownership", "us._domainkey.status.example.com",
@@ -544,7 +552,7 @@ class TestEmailDomain:
         assert _json(result) == EMAIL_DOMAIN
 
     def test_setup_sets_sender_first(self, cli_runner, pages_api):
-        pages_api.v1_pages_page_id_email_domain_records_post_without_preload_content.return_value = FakeResponse(EMAIL_DOMAIN)
+        pages_api.v1_pages_page_id_email_domain_records_post.return_value = EmailDomain.from_dict(EMAIL_DOMAIN)
         result = cli_runner.invoke(app, ["pages", "email-domain", "setup", "-p", "pg1",
                                          "--from-email", "noreply@status.example.com", "--from-name", "Example"])
         assert result.exit_code == 0, result.output
@@ -553,8 +561,9 @@ class TestEmailDomain:
         assert "Registered" in result.stdout
 
     def test_setup_plan_error(self, cli_runner, pages_api):
-        pages_api.v1_pages_page_id_email_domain_records_post_without_preload_content.return_value = FakeResponse(
-            {"error": "email_domain", "message": "Your plan does not support sending from a custom email domain."}, status=402)
+        pages_api.v1_pages_page_id_email_domain_records_post.side_effect = ApiException(
+            status=402, reason="Payment Required",
+            body='{"error": "email_domain", "message": "Your plan does not support sending from a custom email domain."}')
         result = cli_runner.invoke(app, ["pages", "email-domain", "setup", "-p", "pg1"])
         assert result.exit_code == 1
         assert "HTTP 402" in result.stderr and "plan does not support" in result.stderr
@@ -565,7 +574,7 @@ class TestEmailDomain:
         assert result.exit_code == 2
 
     def test_verify(self, cli_runner, pages_api):
-        pages_api.v1_pages_page_id_email_domain_verify_post_without_preload_content.return_value = FakeResponse(
+        pages_api.v1_pages_page_id_email_domain_verify_post.return_value = EmailDomain.from_dict(
             {**EMAIL_DOMAIN, "email_domain_verified": True, "email_domain_status": "confirmed"})
         result = cli_runner.invoke(app, ["pages", "email-domain", "verify", "-p", "pg1"])
         assert result.exit_code == 0

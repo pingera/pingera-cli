@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional
 import typer
 from rich.table import Table
 
-from .base import BaseCommand
-from .status_page_common import DESCRIPTIONS, as_dict, as_list, raw_json, styled, text
+from .base import BaseCommand, to_plain
+from .status_page_common import DESCRIPTIONS, styled, text
 from ..utils.time_utils import format_duration, parse_time_arg
 
 MAX_UPTIME_RANGE_DAYS = 183
@@ -35,8 +35,8 @@ def _seconds(value: Any) -> str:
     return "[green]0s[/green]" if seconds == 0 else format_duration(seconds)
 
 
-def uptime_query(start: Optional[str], end: Optional[str]) -> Dict[str, str]:
-    """Build the backend's start/end query (dates as YYYY-MM-DD); validates before any API call."""
+def uptime_range(start: Optional[str], end: Optional[str]) -> Dict[str, str]:
+    """Convert --from/--to into the API's start/end dates (YYYY-MM-DD); validates before any API call."""
     start_dt = parse_time_arg(start, "--from")
     end_dt = parse_time_arg(end, "--to")
     if start_dt and end_dt and start_dt > end_dt:
@@ -76,7 +76,7 @@ class ComponentExtrasCommand(BaseCommand):
 
     def uptime_report(self, page_id: str, component_ids: List[str], start: Optional[str], end: Optional[str],
                       include_groups: bool):
-        query = uptime_query(start, end)
+        dates = uptime_range(start, end)
         start_dt = parse_time_arg(start, "--from")
         end_dt = parse_time_arg(end, "--to") or datetime.now(timezone.utc)
         if start_dt and end_dt - start_dt > timedelta(days=MAX_UPTIME_RANGE_DAYS):
@@ -86,33 +86,31 @@ class ComponentExtrasCommand(BaseCommand):
             api = self._api()
             ids = list(component_ids)
             if not ids:
-                components = api.v1_pages_page_id_components_get(page_id=page_id) or []
+                components = api.v1_pages_page_id_components_get(page_id=page_id, show_groups=include_groups) or []
                 ids = [c.id for c in components if c.id and (include_groups or not c.group)]
                 if not ids:
                     if self.machine_output:
-                        self.output_data({"page_id": page_id, **query, "components": []})
+                        self.output_data({"page_id": page_id, **dates, "components": []})
                     else:
                         self.display_info(f"No components on page {page_id}.")
                     return
-            data = raw_json(
-                api, "v1_pages_page_id_components_uptime_post", query=query,
-                page_id=page_id, component_uptime_bulk_request={"component_ids": ids},
-            )
+            rows = api.v1_pages_page_id_components_uptime_post(
+                page_id=page_id, component_uptime_bulk_request={"component_ids": ids}, **dates
+            ) or []
         except typer.Exit:
             raise
         except Exception as e:
             self.fail("get component uptime", e)
 
-        rows = [as_dict(r) for r in as_list(data)]
         if self.machine_output:
-            self.output_data({"page_id": page_id, **query, "components": rows})
+            self.output_data({"page_id": page_id, **dates, "components": to_plain(rows)})
             return
         if not rows:
             self.display_info("No uptime data returned.")
             return
 
         first = rows[0]
-        period = f"{text(first.get('range_start'))} → {text(first.get('range_end'))}"
+        period = f"{text(first.range_start)} → {text(first.range_end)}"
         table = Table(title=f"Component uptime: {page_id} ({period})", header_style="bold magenta")
         table.add_column("Component", style="green")
         table.add_column("ID", style="cyan", no_wrap=True)
@@ -122,16 +120,16 @@ class ComponentExtrasCommand(BaseCommand):
         table.add_column("Incidents", justify="right")
         warnings = set()
         for row in rows:
-            pct = _float(row.get("uptime_percentage"))
+            pct = _float(row.uptime_percentage)
             style = _uptime_style(pct)
-            events = as_list(as_dict(row.get("related_events")).get("id"))
-            warnings.update(str(w) for w in as_list(row.get("warnings")))
+            events = (row.related_events.id if row.related_events else None) or []
+            warnings.update(row.warnings or [])
             table.add_row(
-                text(row.get("name")),
-                text(row.get("id")),
+                text(row.name),
+                text(row.id),
                 f"[{style}]{pct:.2f}%[/{style}]" if pct is not None else "-",
-                _seconds(row.get("major_outage")),
-                _seconds(row.get("partial_outage")),
+                _seconds(row.major_outage),
+                _seconds(row.partial_outage),
                 str(len(events)),
             )
         self.console.print(table)
