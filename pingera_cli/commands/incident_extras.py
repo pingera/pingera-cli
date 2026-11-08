@@ -4,13 +4,14 @@ Extra incident commands: `pngr pages incidents reference|log-past|schedule-maint
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import typer
 from rich.table import Table
 
 from .base import BaseCommand
+from .incident_templates import TEMPLATE_OPTION_HELP, load_template
 from .status_page_common import (
     COMPONENT_SPEC_HELP,
     DESCRIPTIONS,
@@ -190,9 +191,9 @@ def register(app: typer.Typer):
     @app.command("schedule-maintenance")
     def schedule_maintenance(
         page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
-        name: str = typer.Option(..., "--name", "-n", help="Maintenance title"),
+        name: Optional[str] = typer.Option(None, "--name", "-n", help="Maintenance title (required unless --template is given)"),
         start: str = typer.Option(..., "--start", help="Window start, in the future (ISO 8601 or +2h / +1d from now)"),
-        end: str = typer.Option(..., "--end", help="Window end (ISO 8601 or +3h / +1d from now)"),
+        end: Optional[str] = typer.Option(None, "--end", help="Window end (ISO 8601 or +3h / +1d from now). Default with --template: start + the template's duration"),
         body: Optional[str] = typer.Option(None, "--body", "-b", help="Description shown on the status page"),
         component_ids: Optional[List[str]] = typer.Option(None, "--component-id", "-c", help="Affected component (repeatable)"),
         notify: bool = typer.Option(False, "--notify/--no-notify", help="Notify subscribers now that maintenance is scheduled"),
@@ -202,12 +203,26 @@ def register(app: typer.Typer):
         transition_notify: bool = typer.Option(True, "--notify-transitions/--no-notify-transitions", help="Notify subscribers when the window starts and ends"),
         remind: bool = typer.Option(True, "--remind/--no-remind", help="Send reminders before the window starts"),
         reminders: str = typer.Option("24h,1h", "--reminders", help="When to remind, before start: comma-separated <n>m|h|d"),
+        template: Optional[str] = typer.Option(None, "--template", "-t", help=TEMPLATE_OPTION_HELP),
     ):
         """Schedule a maintenance window (status 'scheduled', impact 'maintenance')"""
         start_dt = parse_future_time(start, "--start")
-        end_dt = parse_future_time(end, "--end")
         if start_dt <= datetime.now(timezone.utc):
             raise typer.BadParameter("must be in the future", param_hint="--start")
+        preset = load_template(page_id, template, "maintenance")
+        if preset:
+            name = name if name is not None else preset.get("title")
+            body = body if body is not None else (preset.get("body") or None)
+            if not component_ids and preset.get("components"):
+                component_ids = list(preset["components"])
+        if not name:
+            raise typer.BadParameter("is required (or use --template)", param_hint="--name")
+        if end is not None:
+            end_dt = parse_future_time(end, "--end")
+        elif preset and preset.get("duration_minutes"):
+            end_dt = start_dt + timedelta(minutes=preset["duration_minutes"])
+        else:
+            raise typer.BadParameter("is required (or use a --template with a duration)", param_hint="--end")
         if end_dt <= start_dt:
             raise typer.BadParameter("must be after --start", param_hint="--end")
         intervals = [i.strip() for i in reminders.split(",") if i.strip()]

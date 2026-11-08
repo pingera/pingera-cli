@@ -311,8 +311,8 @@ pngr pages incidents list --page-id <page-id> [--component-id <component-id>] [-
 # Get specific incident details
 pngr pages incidents get <incident-id> --page-id <page-id> [--verbose]
 
-# Create a new incident
-pngr pages incidents create --name <name> --status <status> --page-id <page-id> [--body <body>] [--impact <impact>] [--components <components>] [--no-notifications]
+# Create a new incident (--name/--status are optional with --template; explicit options override the template)
+pngr pages incidents create --name <name> --status <status> --page-id <page-id> [--body <body>] [--impact <impact>] [--components <components>] [--no-notifications] [--template <template-id>]
 
 # Update an existing incident
 pngr pages incidents update <incident-id> --page-id <page-id> [--name <name>] [--status <status>] [--body <body>] [--impact <impact>] [--components <components>]
@@ -332,8 +332,35 @@ pngr pages incidents reference
 # Record an incident that already happened (with its timeline) so it shows in history and uptime
 pngr pages incidents log-past --page-id <page-id> --name <name> --impact <impact> [--started <started>] [--resolved <resolved>] [--body <body>] [--resolution <resolution>] [--component <component>...] [--updates-file <updates-file>] [--notify/--no-notify]
 
-# Schedule a maintenance window (status 'scheduled', impact 'maintenance')
-pngr pages incidents schedule-maintenance --page-id <page-id> --name <name> --start <start> --end <end> [--body <body>] [--component-id <component-ids>...] [--notify/--no-notify] [--auto-start/--no-auto-start] [--auto-complete/--no-auto-complete] [--auto-component-status/--no-auto-component-status] [--notify-transitions/--no-notify-transitions] [--remind/--no-remind] [--reminders <reminders>]
+# Schedule a maintenance window (status 'scheduled', impact 'maintenance'); with --template, --name and --end default to the template's title and start + duration
+pngr pages incidents schedule-maintenance --page-id <page-id> --name <name> --start <start> --end <end> [--body <body>] [--component-id <component-ids>...] [--notify/--no-notify] [--auto-start/--no-auto-start] [--auto-complete/--no-auto-complete] [--auto-component-status/--no-auto-component-status] [--notify-transitions/--no-notify-transitions] [--remind/--no-remind] [--reminders <reminders>] [--template <template-id>]
+```
+
+### `pngr pages incidents templates`
+📄 Manage reusable incident and maintenance templates (title, message, incident status, components, maintenance duration). Apply them with `--template` on `create`, `schedule-maintenance` and `updates add`.
+
+```bash
+# List a page's templates
+pngr pages incidents templates list --page-id <page-id> [--type incident|maintenance]
+
+# Show a template with its full message
+pngr pages incidents templates get <template-id> --page-id <page-id>
+
+# Create a template (max 50 per page). Components: ID=STATUS for incident templates, ID for maintenance templates
+pngr pages incidents templates create --page-id <page-id> --type <incident|maintenance> --name <name> --title <title> [--body <body>] [--status <status>] [--component <component>...] [--duration <90m|2h|1h30m>]
+
+# Update a template; only the options you pass are changed
+pngr pages incidents templates update <template-id> --page-id <page-id> [--name <name>] [--title <title>] [--body <body>] [--status <status>] [--clear-status] [--component <component>...] [--clear-components] [--duration <duration>] [--clear-duration]
+
+# Delete a template (incidents created from it are not affected)
+pngr pages incidents templates delete <template-id> --page-id <page-id> [--confirm]
+
+# Examples
+pngr pages incidents templates create -p <page-id> --type incident --name "API down" --title "API is unavailable" \
+  --body "We are investigating API errors." --status investigating -c <component-id>=major_outage
+pngr pages incidents create -p <page-id> --template <template-id>
+pngr pages incidents updates add <incident-id> -p <page-id> --template <resolved-template-id>
+pngr pages incidents schedule-maintenance -p <page-id> --start +1d --template <maintenance-template-id>
 ```
 
 ### `pngr pages incidents updates`
@@ -343,8 +370,8 @@ pngr pages incidents schedule-maintenance --page-id <page-id> --name <name> --st
 # List all updates of an incident (newest first)
 pngr pages incidents updates list <incident-id> --page-id <page-id>
 
-# Post a new update to an incident (changes its status, component statuses and notifies subscribers)
-pngr pages incidents updates add <incident-id> --page-id <page-id> [--status <status>] [--body <body>] [--component <component>...] [--notify/--no-notify]
+# Post a new update to an incident (changes its status, component statuses and notifies subscribers); --template fills message, status and components
+pngr pages incidents updates add <incident-id> --page-id <page-id> [--status <status>] [--body <body>] [--component <component>...] [--notify/--no-notify] [--template <template-id>]
 
 # Edit an existing update: fix its text, time or affected components (no notifications are sent)
 pngr pages incidents updates edit <incident-id> <update-id> --page-id <page-id> [--body <body>] [--posted-at <posted-at>] [--component <component>...] [--clear-components]

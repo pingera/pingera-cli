@@ -468,6 +468,7 @@ class IncidentsCommand(BaseCommand):
 app = typer.Typer(name="incidents", help="🚨 Manage status page incidents", no_args_is_help=True)
 
 from .status_page_common import COMPONENT_STATUSES, INCIDENT_IMPACTS, INCIDENT_STATUSES, MAINTENANCE_STATUSES  # noqa: E402
+from . import incident_templates  # noqa: E402
 
 
 @app.command("list")
@@ -497,13 +498,14 @@ def get_incident(
 
 @app.command("create")
 def create_incident(
-    name: str = typer.Option(..., "--name", "-n", help="Incident name/title"),
-    status: str = typer.Option(..., "--status", "-s", help=f"Incident status: {', '.join(INCIDENT_STATUSES)}. Maintenance statuses ({', '.join(MAINTENANCE_STATUSES)}) allow only --impact maintenance or none; to plan maintenance use 'schedule-maintenance'"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Incident name/title (required unless --template is given)"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help=f"Incident status: {', '.join(INCIDENT_STATUSES)}. Maintenance statuses ({', '.join(MAINTENANCE_STATUSES)}) allow only --impact maintenance or none; to plan maintenance use 'schedule-maintenance'. Default with --template: the template's status, else investigating"),
     page_id: str = typer.Option(..., "--page-id", "-p", help="Status page ID"),
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Incident description/body"),
     impact: Optional[str] = typer.Option(None, "--impact", "-i", help=f"Impact: {', '.join(INCIDENT_IMPACTS)}. Default: derived from the worst component status"),
     components: Optional[str] = typer.Option(None, "--components", "-c", help=f"Components as JSON (e.g., '{{\"component_id\":\"status\"}}'). Valid statuses: {', '.join(COMPONENT_STATUSES)}"),
     no_notifications: bool = typer.Option(False, "--no-notifications", help="Don't send notifications"),
+    template: Optional[str] = typer.Option(None, "--template", "-t", help=incident_templates.TEMPLATE_OPTION_HELP),
 ):
     """Create a new incident"""
     import json
@@ -519,7 +521,18 @@ def create_incident(
             console = Console()
             console.print(f"[red]Error parsing components JSON: {e}[/red]")
             raise typer.Exit(1)
-    
+
+    preset = incident_templates.load_template(page_id, template, "incident")
+    if preset:
+        name = name if name is not None else preset.get("title")
+        status = status or preset.get("status") or "investigating"
+        body = body if body is not None else (preset.get("body") or None)
+        components_dict = components_dict if components_dict is not None else preset.get("components")
+    if not name:
+        raise typer.BadParameter("is required (or use --template)", param_hint="--name")
+    if not status:
+        raise typer.BadParameter("is required (or use --template)", param_hint="--status")
+
     incidents_cmd = IncidentsCommand(get_output_format())
     incidents_cmd.create_incident(
         page_id=page_id,
@@ -608,4 +621,5 @@ from . import incident_extras, incident_updates  # noqa: E402
 
 app.add_typer(incident_updates.updates_app, name="updates")
 app.add_typer(incident_updates.postmortem_app, name="postmortem")
+app.add_typer(incident_templates.app, name="templates")
 incident_extras.register(app)

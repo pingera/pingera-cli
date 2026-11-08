@@ -10,7 +10,7 @@ A beautiful Python CLI tool for the [Pingera Platform](https://pingera.ru) - bui
 
 - **Beautiful Terminal Output**: Powered by Rich library for colorful, formatted output
 - **Modern CLI Interface**: Built with Typer for intuitive command-line interactions  
-- **Pingera Platform Integration**: Manage checks, uptime and performance analytics, alert rules and channels, and status pages (components, incidents, maintenance, postmortems) through the Pingera SDK
+- **Pingera Platform Integration**: Manage checks, uptime and performance analytics, alert rules and channels, and status pages (components, incidents, maintenance, postmortems, incident templates) through the Pingera SDK
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 - **Easy Installation**: Simple pip install with all dependencies managed
 - **Configuration Management**: Flexible configuration with environment variables and config files
@@ -138,6 +138,11 @@ pngr pages incidents updates add <incident-id> --page-id <page-id> --status reso
 
 # Schedule maintenance
 pngr pages incidents schedule-maintenance --page-id <page-id> --name "DB upgrade" --start +24h --end +26h
+
+# Reuse saved incident and maintenance templates
+pngr pages incidents templates list --page-id <page-id>
+pngr pages incidents create --page-id <page-id> --template <template-id>
+pngr pages incidents schedule-maintenance --page-id <page-id> --start +24h --template <template-id>
 
 # Component uptime for the whole page
 pngr pages components uptime-report --page-id <page-id> --from 2026-01-01
