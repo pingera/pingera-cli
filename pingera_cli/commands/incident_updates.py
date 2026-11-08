@@ -12,6 +12,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from .base import BaseCommand
+from .incident_templates import TEMPLATE_OPTION_HELP, load_template
 from .status_page_common import (
     COMPONENT_SPEC_HELP,
     INCIDENT_STATUSES,
@@ -262,13 +263,19 @@ def add_update(
     body: Optional[str] = typer.Option(None, "--body", "-b", help="Update message shown on the status page"),
     component: Optional[List[str]] = typer.Option(None, "--component", "-c", help=COMPONENT_SPEC_HELP + ". Default: keep the previous update's component statuses"),
     notify: bool = typer.Option(True, "--notify/--no-notify", help="Notify page subscribers about this update"),
+    template: Optional[str] = typer.Option(None, "--template", "-t", help=TEMPLATE_OPTION_HELP + " (the incident title is never changed)"),
 ):
     """Post a new update to an incident (changes its status, component statuses and notifies subscribers)"""
     if status is not None and status not in UPDATE_STATUSES:
         raise typer.BadParameter(f"must be one of {', '.join(UPDATE_STATUSES)}", param_hint="--status")
-    if status is None and body is None:
-        raise typer.BadParameter("pass --status and/or --body", param_hint="--status")
     components = parse_component_statuses(component)
+    preset = load_template(page_id, template, "incident")
+    if preset:
+        status = status or preset.get("status")
+        body = body if body is not None else (preset.get("body") or None)
+        components = components if components is not None else preset.get("components")
+    if status is None and body is None:
+        raise typer.BadParameter("pass --status and/or --body (or a --template)", param_hint="--status")
     IncidentUpdatesCommand(_output_format()).add_update(page_id, incident_id, status, body, components, notify)
 
 
